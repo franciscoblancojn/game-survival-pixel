@@ -1,0 +1,145 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+
+<BaseLayout>
+  <div class="app">
+    <div id="screen-home" class="screen active">
+      <div class="screen-content">
+        <div class="home-hero">
+          <div class="home-icon">🚀</div>
+          <h1>Mi App</h1>
+          <p class="home-subtitle">Hello World</p>
+        </div>
+        <div class="home-card">
+          <p>Tu app está lista para funcionar.</p>
+          <p class="home-version">Versión 1.0.0</p>
+        </div>
+        <div class="home-features">
+          <div class="feature-item">
+            <span class="feature-icon">🎨</span>
+            <span>Tema claro/oscuro</span>
+          </div>
+          <div class="feature-item">
+            <span class="feature-icon">📱</span>
+            <span>Optimizada para móvil</span>
+          </div>
+          <div class="feature-item">
+            <span class="feature-icon">⚡</span>
+            <span>Rápida y ligera</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="screen-about" class="screen">
+      <div class="screen-content">
+        <div class="screen-header">
+          <h2>ℹ️ Acerca de</h2>
+        </div>
+        <div class="about-card">
+          <div class="about-icon">📱</div>
+          <h3>Mi App</h3>
+          <p class="about-version">Versión 1.0.0</p>
+        </div>
+        <div class="about-info">
+          <p>Una aplicación de ejemplo construida con Astro y empaquetada como APK usando Android WebView.</p>
+          <div class="about-details">
+            <div class="about-row">
+              <span class="about-label">Plataforma</span>
+              <span class="about-value">Android</span>
+            </div>
+            <div class="about-row">
+              <span class="about-label">SDK mínimo</span>
+              <span class="about-value">Android 5.0</span>
+            </div>
+            <div class="about-row">
+              <span class="about-label">Tecnología</span>
+              <span class="about-value">Astro + WebView</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="screen-settings" class="screen">
+      <div class="screen-content">
+        <div class="screen-header">
+          <h2>⚙️ Configuración</h2>
+        </div>
+        <div class="settings-section">
+          <h3 class="settings-section-title">Apariencia</h3>
+          <div class="settings-item">
+            <div class="settings-item-info">
+              <span class="settings-item-icon">🌙</span>
+              <div>
+                <span class="settings-item-label">Modo oscuro</span>
+                <span class="settings-item-desc">Cambiar entre tema claro y oscuro</span>
+              </div>
+            </div>
+            <label class="toggle">
+              <input type="checkbox" id="toggle-theme" />
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+        </div>
+        <div class="settings-section">
+          <h3 class="settings-section-title">Personalización</h3>
+          <div class="settings-item">
+            <div class="settings-item-info">
+              <span class="settings-item-icon">👤</span>
+              <div>
+                <span class="settings-item-label">Tu nombre</span>
+                <span class="settings-item-desc">Aparecerá en la pantalla de inicio</span>
+              </div>
+            </div>
+            <input type="text" id="input-username" class="settings-input" placeholder="Tu nombre" maxlength="20" />
+          </div>
+        </div>
+        <div class="settings-section">
+          <h3 class="settings-section-title">Datos</h3>
+          <div class="settings-item clickable" id="btn-reset">
+            <div class="settings-item-info">
+              <span class="settings-item-icon">🗑️</span>
+              <div>
+                <span class="settings-item-label">Resetear datos</span>
+                <span class="settings-item-desc">Borrar todos los datos guardados</span>
+              </div>
+            </div>
+            <span class="settings-arrow">›</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <nav class="bottom-nav" id="bottom-nav">
+      <button class="nav-item active" data-screen="home">
+        <span class="nav-icon">🏠</span>
+        <span class="nav-label">Inicio</span>
+      </button>
+      <button class="nav-item" data-screen="about">
+        <span class="nav-icon">ℹ️</span>
+        <span class="nav-label">Info</span>
+      </button>
+      <button class="nav-item" data-screen="settings">
+        <span class="nav-icon">⚙️</span>
+        <span class="nav-label">Config</span>
+      </button>
+    </nav>
+  </div>
+
+  <div id="toast-container" class="toast-container"></div>
+  <div id="confirm-overlay" class="confirm-overlay hidden">
+    <div class="confirm-dialog">
+      <p id="confirm-message"></p>
+      <div class="confirm-actions">
+        <button id="confirm-cancel" class="confirm-btn cancel">Cancelar</button>
+        <button id="confirm-ok" class="confirm-btn ok">Aceptar</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import '../scripts/app.js';
+  </script>
+</BaseLayout>

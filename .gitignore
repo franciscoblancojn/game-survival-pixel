@@ -1,0 +1,19 @@
+dist/
+.astro/
+node_modules/
+
+android/.gradle/
+android/local.properties
+android/app/build/
+android/gradle/wrapper/gradle-wrapper.jar
+android/gradlew
+android/gradlew.bat
+
+.env
+.env.production
+.DS_Store
+.idea/
+
+# dev
+bun.lockb
+package-lock.json
