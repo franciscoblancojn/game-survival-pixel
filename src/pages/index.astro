@@ -1,6 +1,13 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 import Hub from '../components/Hub/index.astro';
+import Inventory from '../components/Inventory/index.astro';
+import Crafting from '../components/Crafting/index.astro';
+import Minimap from '../components/Minimap/index.astro';
+import Death from '../components/Death/index.astro';
+import ConfirmDialog from '../components/ConfirmDialog/index.astro';
+import BottomBar from '../components/BottomBar/index.astro';
+import Toast from '../components/Toast/index.astro';
 ---
 
 <BaseLayout title="Mazmorra">
@@ -8,101 +15,15 @@ import Hub from '../components/Hub/index.astro';
     <canvas id="game-canvas"></canvas>
 
     <Hub/>
-
-    <!-- Inventory overlay -->
-    <div id="inventory-overlay" class="game-overlay" style="display: none;">
-      <div class="inventory-panel">
-        <div class="inventory-header">
-          <h3>🎒 Inventario</h3>
-          <button class="inventory-close" id="inventory-close-btn">✕</button>
-        </div>
-        <div class="inventory-equipment">
-          <div class="equip-slot">
-            <span class="equip-label">⚔️ Arma</span>
-            <div id="equip-weapon" class="equip-item">Vacío</div>
-          </div>
-          <div class="equip-slot">
-            <span class="equip-label">🛡️ Armadura</span>
-            <div id="equip-armor" class="equip-item">Vacío</div>
-          </div>
-        </div>
-        <div id="inventory-grid" class="inventory-grid"></div>
-        <div id="inventory-detail" class="inventory-detail" style="display: none;"></div>
-        <div class="inventory-footer">
-          <span id="inventory-count">0/20 items</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- Crafting overlay -->
-    <div id="crafting-overlay" class="game-overlay" style="display: none;">
-      <div class="crafting-panel">
-        <div class="crafting-header">
-          <h3>⚒️ Crafteo</h3>
-          <button class="crafting-close" id="crafting-close-btn">✕</button>
-        </div>
-        <div id="crafting-stations" class="crafting-stations">
-          <button class="station-btn active" data-station="workbench">🪵</button>
-          <button class="station-btn" data-station="furnace">🔥</button>
-          <button class="station-btn" data-station="anvil">🔨</button>
-          <button class="station-btn" data-station="alchemy">🧪</button>
-        </div>
-        <div id="crafting-recipes" class="crafting-recipes"></div>
-      </div>
-    </div>
-
-    <!-- Minimap overlay -->
-    <div id="minimap-overlay" class="minimap-overlay" style="display: none;">
-      <div class="minimap-header">
-        <h3>🗺️ Mapa</h3>
-        <button class="minimap-close" id="minimap-close-btn">✕</button>
-      </div>
-      <div class="minimap-canvas-wrap"></div>
-      <div class="minimap-legend">
-        <span><i style="background:#4ecdc4"></i> Tú</span>
-        <span><i style="background:#ff6b6b"></i> Enemigo</span>
-        <span><i style="background:#ffd93d"></i> Item</span>
-        <span><i style="background:#2ecc71"></i> Escalera</span>
-      </div>
-    </div>
-
-    <!-- Death overlay -->
-    <div id="death-overlay" class="game-overlay" style="display: none;"></div>
-
-    <!-- Confirm dialog -->
-    <div id="confirm-overlay" class="confirm-overlay hidden">
-      <div class="confirm-box">
-        <div id="confirm-message" class="confirm-message"></div>
-        <div class="confirm-actions">
-          <button id="confirm-cancel" class="confirm-btn cancel">Cancelar</button>
-          <button id="confirm-ok" class="confirm-btn ok">Aceptar</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Bottom action bar -->
-    <nav class="bottom-bar" id="bottom-bar">
-      <button class="bar-btn" id="btn-inventory" aria-label="Inventario">
-        <span class="bar-icon">🎒</span>
-        <span class="bar-label">Mochila</span>
-      </button>
-      <button class="bar-btn" id="btn-crafting" aria-label="Crafteo">
-        <span class="bar-icon">⚒️</span>
-        <span class="bar-label">Crafteo</span>
-      </button>
-      <button class="bar-btn" id="btn-minimap" aria-label="Mapa">
-        <span class="bar-icon">🗺️</span>
-        <span class="bar-label">Mapa</span>
-      </button>
-      <button class="bar-btn" id="btn-pickup" aria-label="Recoger">
-        <span class="bar-icon">✋</span>
-        <span class="bar-label">Recoger</span>
-      </button>
-    </nav>
+    <Inventory/>
+    <Crafting/>
+    <Minimap/>
+    <Death/>
+    <ConfirmDialog/>
+    <BottomBar/>
   </div>
 
-  <!-- Toast container -->
-  <div id="toast-container" class="toast-container"></div>
+  <Toast/>
 
   <script type="module">
     import '../scripts/app.ts';
