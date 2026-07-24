@@ -1,4 +1,4 @@
-export function showConfirm(message) {
+export function showConfirm(message: string): Promise<boolean> {
   return new Promise((resolve) => {
     const overlay = document.getElementById('confirm-overlay');
     const msgEl = document.getElementById('confirm-message');
@@ -13,7 +13,7 @@ export function showConfirm(message) {
     msgEl.textContent = message;
     overlay.classList.remove('hidden');
 
-    const cleanup = (result) => {
+    const cleanup = (result: boolean) => {
       overlay.classList.add('hidden');
       cancelBtn.removeEventListener('click', onCancel);
       okBtn.removeEventListener('click', onOk);

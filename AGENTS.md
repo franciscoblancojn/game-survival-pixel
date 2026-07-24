@@ -1,4 +1,4 @@
-# template-astro-android
+# Mazmorra - Juego de Supervivencia
 
 ## Comandos
 
@@ -6,97 +6,104 @@
 bun install           # Instalar dependencias
 bun run dev           # Servidor de desarrollo (localhost:4321)
 bun run build         # Build estático → dist/
-bun run build:apk     # Build + APK → dist/template-astro-android.apk
+bun run build:apk     # Build + APK → dist/mazmorra.apk
 bun run preview       # Preview del build
 ```
 
 > **IMPORTANTE**: Usar siempre `bun` como package manager. `npm install` está bloqueado intencionalmente.
+> **Node.js**: Requiere >= 22.12.0. Usar `nvm use 22.23.1` si es necesario.
 
 ## Estructura
 
-- `src/pages/index.astro` - SPA con 3 pantallas (Home, About, Settings)
-- `src/scripts/app.js` - Entry point, navegación, orquestación
-- `src/scripts/components/` - Componentes modulares (Toast, ConfirmDialog)
-- `src/scripts/constants.js` - Constantes (SCREENS, STORAGE_KEY, etc.)
-- `src/scripts/helpers.js` - Utilidades (debounce, formatDate, getGreeting)
-- `src/scripts/storage.js` - Capa de persistencia (localStorage)
-- `src/styles/main.css` - Estilos globales con temas light/dark (552 líneas)
-- `src/layouts/BaseLayout.astro` - Shell HTML optimizado para móvil
-- `scripts/` - Build automation (post-build, build-apk)
-- `android/` - Configuración Android (WebView wrapper)
-- `.opencode/` - Configuración de opencode (agentes, skills)
-
-## Arquitectura
-
-- Framework: Astro (SSG) + vanilla JS
-- Empaquetado: Android WebView
-- Persistencia: localStorage
-- Navegación: SPA manual con CSS animations
-- Temas: Light/Dark con CSS custom properties
-- Build: Un solo archivo HTML autocontenido
-
-## Flujo de Build
-
-1. `astro build` genera archivos estáticos en `dist/`
-2. `post-build.mjs` inlinea todo el JS en `index.html`
-3. `build-apk.mjs` copia el HTML a Android assets y ejecuta Gradle
-
-## Pantallas
-
-| Pantalla | ID | Descripción |
-|----------|-----|-------------|
-| Home | `screen-home` | Hero con ícono, nombre, features |
-| About | `screen-about` | Info de la app, versión, tecnología |
-| Settings | `screen-settings` | Tema oscuro, nombre, reset datos |
-
-## Navegación
-
-- Bottom nav bar (click)
-- Swipe gestures (touch events)
-- Keyboard shortcuts (1/2/3)
-
-## Componentes
-
-### Toast (`src/scripts/components/Toast.js`)
-```javascript
-import { showToast } from './components/Toast.js';
-showToast('Mensaje', 'info');     // info | success | error
+```
+src/
+├── pages/index.astro              # Pantalla de juego (canvas fullscreen)
+├── scripts/
+│   ├── app.js                     # Entry point → inicializa Game
+│   ├── constants.js               # Constantes: TILE, COLORS, ENEMY_TYPES, ITEM_TYPES
+│   ├── game/
+│   │   ├── Game.js                # Motor principal (estado, turnos, overlays, save/load)
+│   │   ├── Renderer.js            # Canvas rendering (tiles, entities, particles)
+│   │   ├── Input.js               # Click, touch, swipe, teclado (WASD/flechas)
+│   │   ├── entities/
+│   │   │   ├── Entity.js          # Clase base (HP, ataque, defensa, muerte)
+│   │   │   └── Player.js          # Jugador (stats, inventario, equipo, level up)
+│   │   ├── world/
+│   │   │   ├── Tile.js            # Helpers para tipos de tile
+│   │   │   ├── Room.js            # Definición de sala (puertas, muros internos)
+│   │   │   └── Dungeon.js         # Generación de niveles (salas, pasillos, enemigos, items)
+│   │   ├── systems/
+│   │   │   ├── TurnSystem.js      # Turnos: jugador → enemigos → mundo (hambre)
+│   │   │   └── CombatSystem.js    # Daño, persecución, movimiento de enemigos
+│   │   └── data/
+│   │       └── recipes.js         # Recetas de crafteo por estación
+│   └── components/
+│       ├── HUD.js                 # Barras HP/hambre/XP, stats, log de mensajes
+│       ├── MiniMap.js             # Minimapa canvas con vista de la mazmorra
+│       ├── Inventory.js           # Overlay de inventario + equipamiento
+│       ├── CraftingUI.js          # Overlay de crafteo por estaciones
+│       ├── Toast.js               # Notificaciones
+│       └── ConfirmDialog.js       # Diálogos de confirmación
+└── styles/main.css                # Estilos del juego (pixel art dark theme)
 ```
 
-### ConfirmDialog (`src/scripts/components/ConfirmDialog.js`)
-```javascript
-import { showConfirm } from './components/ConfirmDialog.js';
-const confirmed = await showConfirm('¿Estás seguro?');
+## Arquitectura del Juego
+
+- **Renderizado**: Canvas 2D, tiles de 32px, sprites programáticos (fillRect)
+- **Movimiento**: Turnos discretos (como Pixel Dungeon) — clic/tap en celda adyacente
+- **Input**: Click/tap, swipe, WASD/flechas, long-press para esperar
+- **Persistencia**: localStorage (auto-guardado cada 30s + al cerrar)
+- **Build**: Astro SSG → post-build inlinea JS → un solo HTML autocontenido
+- **Android**: WebView wrapper con JS interface
+
+## Sistemas del Juego
+
+### Tiles (Tipos de casilla)
+| ID | Tipo | Caminable | Descripción |
+|----|------|-----------|-------------|
+| 0 | VOID | No | Fuera del mapa |
+| 1 | FLOOR | Sí | Suelo (patrón ajedrez) |
+| 2 | WALL | No | Muro (bloquea movimiento) |
+| 3 | DOOR | Sí | Puerta entre salas |
+| 4 | CORRIDOR | Sí | Pasillo |
+| 5 | STAIRS_DOWN | Sí | Escalera bajar piso |
+| 6 | STAIRS_UP | Sí | Escalera subir piso |
+
+### Generación de Niveles
+- Salas rectangulares aleatorias (5-10 de ancho/alto)
+- Conectadas por pasillos en L
+- Tipos de sala: start, normal, enemy, treasure, workshop, trap
+- Enemigos y items escalan con el piso
+
+### Combate
+```
+Daño = max(1, ATK_atacante - DEF_defensor + varianza(-1,0,+1))
 ```
 
-## Storage
+### Crafteo (4 estaciones)
+- 🪵 Banco de trabajo: armas y herramientas básicas
+- 🔥 Horno: fundir, cocinar, armadura de malla
+- 🔨 Yunque: armas/armadura de hierro
+- 🧪 Mesón: pociones
 
-```javascript
-import { loadData, saveData, resetData } from './storage.js';
-const data = loadData();      // { version: 1, settings: { theme, username } }
-saveData(data);
-resetData();                  // Limpia localStorage y retorna defaults
-```
-
-## CSS Themes
-
-Variables en `:root` (light) y `[data-theme="dark"]`:
-- `--bg`, `--surface`, `--accent`, `--text`, `--text-secondary`
-- `--border`, `--shadow`, `--radius`
-
-## Android
-
-- `compileSdk = 34`, `minSdk = 21`, `targetSdk = 34`
-- WebView con JavaScript y DOM Storage habilitados
-- Interfaz JS: `AndroidExporter` (downloadFile, closeApp, openDownloads)
-- Back button navega el historial del WebView
+### Controles
+| Acción | Teclado | Touch |
+|--------|---------|-------|
+| Mover | WASD / Flechas | Tap en celda adyacente / Swipe |
+| Esperar | Espacio | Long press (500ms) |
+| Recoger | G | Botón "Recoger" |
+| Inventario | I | Botón "Mochila" |
+| Crafteo | C | Botón "Crafteo" |
+| Mapa | M | Botón "Mapa" |
+| Cerrar overlay | Escape | Tap fuera / botón ✕ |
 
 ## Reglas de Desarrollo
 
-1. **No agregar dependencias innecesarias** - El proyecto es vanilla JS, mantener así
-2. **CSS inline en build** - No crear archivos CSS separados
-3. **Componentes en src/scripts/** - No en src/components/
-4. **Constates en constants.js** - Evitar magic strings
-5. **Storage versionado** - Actualizar STORAGE_VERSION al cambiar esquema
-6. **Mobile-first** - Todos los estilos optimizados para móvil
-7. **Un solo HTML** - El build final debe ser un archivo autocontenido
+1. **Sin dependencias externas** — Todo vanilla JS + Canvas API
+2. **CSS inline en build** — No archivos CSS separados
+3. **Componentes en src/scripts/** — No en src/components/
+4. **Constantes en constants.js** — Evitar magic strings
+5. **Mobile-first** — Touch como input primario
+6. **Un solo HTML** — Build final autocontenido
+7. **Sprites programáticos** — Todo con ctx.fillRect(), sin imágenes externas
+8. **Turnos discretos** — Mundo solo avanza cuando el jugador actúa

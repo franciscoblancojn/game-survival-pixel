@@ -1,6 +1,6 @@
-let toastTimeout;
+let toastTimeout: ReturnType<typeof setTimeout>;
 
-export function showToast(message, type = 'info') {
+export function showToast(message: string, type = 'info'): void {
   const container = document.getElementById('toast-container');
   if (!container) return;
 
