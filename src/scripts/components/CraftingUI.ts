@@ -2,28 +2,20 @@ import { RECIPES, canCraft, craft } from '../game/data/recipes.js';
 import type { Game } from '../game/Game.js';
 import type { RecipeStation } from '../types.js';
 
-interface CraftingStation {
-  id: RecipeStation;
-  name: string;
-  icon: string;
-}
-
+/**
+ * CraftingUI — Gestiona el overlay de crafteo.
+ *
+ * El HTML base ya existe en .astro. Solo actualiza contenido dinámico.
+ */
 export class CraftingUI {
   private game: Game;
   public visible: boolean;
   public selectedStation: RecipeStation;
-  private stations: CraftingStation[];
 
   constructor(game: Game) {
     this.game = game;
     this.visible = false;
     this.selectedStation = 'workbench';
-    this.stations = [
-      { id: 'workbench', name: '🪵 Banco de trabajo', icon: '🪵' },
-      { id: 'furnace', name: '🔥 Horno', icon: '🔥' },
-      { id: 'anvil', name: '🔨 Yunque', icon: '🔨' },
-      { id: 'alchemy', name: '🧪 Mesón', icon: '🧪' },
-    ];
   }
 
   toggle(): void {
@@ -38,52 +30,89 @@ export class CraftingUI {
   render(): void {
     if (!this.visible) return;
 
-    const el = document.getElementById('crafting-overlay');
-    if (!el) return;
+    // Actualizar estaciones activas
+    this.renderStations();
+
+    // Actualizar recetas
+    this.renderRecipes();
+  }
+
+  private renderStations(): void {
+    const stationsContainer = document.getElementById('crafting-stations');
+    if (!stationsContainer) return;
+
+    const stations = [
+      { id: 'workbench', icon: '🪵' },
+      { id: 'furnace', icon: '🔥' },
+      { id: 'anvil', icon: '🔨' },
+      { id: 'alchemy', icon: '🧪' },
+    ];
+
+    stationsContainer.innerHTML = stations
+      .map(
+        s => `
+      <button class="station-btn ${this.selectedStation === s.id ? 'active' : ''}"
+              data-station="${s.id}">
+        ${s.icon}
+      </button>
+    `
+      )
+      .join('');
+
+    // Agregar event listeners
+    stationsContainer.querySelectorAll('.station-btn[data-station]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const stationId = btn.getAttribute('data-station') as RecipeStation;
+        this.selectStation(stationId);
+      });
+    });
+  }
+
+  private renderRecipes(): void {
+    const recipesContainer = document.getElementById('crafting-recipes');
+    if (!recipesContainer) return;
 
     const { player } = this.game;
     const recipes = RECIPES[this.selectedStation] || {};
 
-    el.innerHTML = `
-      <div class="crafting-panel">
-        <div class="crafting-header">
-          <h3>⚒️ Crafteo</h3>
-          <button class="crafting-close" onclick="window.gameInstance?.toggleCrafting()">✕</button>
-        </div>
-        <div class="crafting-stations">
-          ${this.stations.map(s => `
-            <button class="station-btn ${this.selectedStation === s.id ? 'active' : ''}"
-                    onclick="window.gameInstance?.selectStation('${s.id}')">
-              ${s.icon}
-            </button>
-          `).join('')}
-        </div>
-        <div class="crafting-recipes">
-          ${Object.entries(recipes).map(([key, recipe]) => {
-            const craftable = canCraft(recipe, player.inventory);
-            const materials = Object.entries(recipe.materials).map(([mat, count]) => {
-              const have = player.getItemCount(mat);
-              return `<span class="${have >= count ? 'has' : 'missing'}">${mat}: ${have}/${count}</span>`;
-            }).join(' ');
+    if (Object.keys(recipes).length === 0) {
+      recipesContainer.innerHTML = '<div class="no-recipes">No hay recetas disponibles</div>';
+      return;
+    }
 
-            return `
-              <div class="recipe-card ${craftable ? 'craftable' : 'locked'}">
-                <div class="recipe-info">
-                  <div class="recipe-name">${recipe.name}</div>
-                  <div class="recipe-materials">${materials}</div>
-                </div>
-                <button class="recipe-craft-btn"
-                        ${craftable ? '' : 'disabled'}
-                        onclick="window.gameInstance?.craftItem('${this.selectedStation}', '${key}')">
-                  ${craftable ? 'Craftear' : 'Falta'}
-                </button>
-              </div>
-            `;
-          }).join('')}
-          ${Object.keys(recipes).length === 0 ? '<div class="no-recipes">No hay recetas disponibles</div>' : ''}
+    recipesContainer.innerHTML = Object.entries(recipes)
+      .map(([key, recipe]) => {
+        const craftable = canCraft(recipe, player.inventory);
+        const materials = Object.entries(recipe.materials)
+          .map(([mat, count]) => {
+            const have = player.getItemCount(mat);
+            return `<span class="${have >= count ? 'has' : 'missing'}">${mat}: ${have}/${count}</span>`;
+          })
+          .join(' ');
+
+        return `
+        <div class="recipe-card ${craftable ? 'craftable' : 'locked'}">
+          <div class="recipe-info">
+            <div class="recipe-name">${recipe.name}</div>
+            <div class="recipe-materials">${materials}</div>
+          </div>
+          <button class="recipe-craft-btn" data-station="${this.selectedStation}" data-recipe="${key}"
+                  ${craftable ? '' : 'disabled'}>
+            ${craftable ? 'Craftear' : 'Falta'}
+          </button>
         </div>
-      </div>
-    `;
+      `;
+      })
+      .join('');
+
+    // Agregar event listeners
+    recipesContainer.querySelectorAll('button[data-recipe]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const stationId = btn.getAttribute('data-station')!;
+        const recipeKey = btn.getAttribute('data-recipe')!;
+        this.craftItem(stationId, recipeKey);
+      });
+    });
   }
 
   selectStation(stationId: string): void {
