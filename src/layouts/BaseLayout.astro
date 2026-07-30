@@ -1,5 +1,7 @@
 ---
 import '../styles/main.css';
+import State from '../state/index.astro';
+
 
 const title = 'Mazmorra';
 const description = 'Juego de supervivencia en la mazmorra';
@@ -47,5 +49,6 @@ const themeColor = '#1a1a2e';
   </head>
   <body>
     <slot />
+    <State/>
   </body>
 </html>

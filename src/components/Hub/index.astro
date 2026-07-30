@@ -37,3 +37,12 @@
   </div>
   <div id="hub-messages" class="hud-messages"></div>
 </div>
+<script>
+  // Cuando el DOM esté listo, renderizar el HUD vía STATE global
+  const render = () => window.STATE?.hub.onRender();
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", render);
+  } else {
+    render();
+  }
+</script>

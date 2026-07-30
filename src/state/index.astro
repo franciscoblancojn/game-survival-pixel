@@ -1,0 +1,15 @@
+---
+import { hub } from './Hub'
+---
+<script>
+  // Exponer STATE globalmente para que todos los componentes lo vean
+  window.STATE = { hub };
+
+  // Renderizar el HUD en cuanto el DOM esté listo
+  const render = () => hub.onRender();
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", render);
+  } else {
+    render();
+  }
+</script>
