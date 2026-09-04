@@ -1,6 +1,4 @@
-import {
-  ENEMY_TYPES, MAX_ENEMIES_BASE, DIFFICULTY_SETTINGS, ENEMY_RESPAWN_MIN_DISTANCE,
-} from '../../constants.js';
+import { MAX_ENEMIES_BASE, DIFFICULTY_SETTINGS, ENEMY_RESPAWN_MIN_DISTANCE } from '../../constants.js';
 import { ENEMY_DEFINITIONS } from '../../../assets/enemies/index.js';
 import { Tile } from '../world/Tile.js';
 import type { EnemyInstance, Difficulty } from '../../types.js';
@@ -13,61 +11,18 @@ export function getMaxEnemies(floor: number, difficulty: Difficulty): number {
   return MAX_ENEMIES_BASE + Math.ceil(floor / setting.divisor);
 }
 
-interface NormalizedEnemyStats {
-  name: string;
-  hp: number;
-  attack: number;
-  defense: number;
-  xp: number;
-  aggroRange: number;
-  color: string;
-  darkColor: string;
-  speed: number;
-}
-
 /**
- * Une las dos fuentes de definiciones de enemigos que conviven hoy:
- * - ENEMY_TYPES (constants.ts) — entradas viejas, planas, sin loot/oro.
- * - ENEMY_DEFINITIONS (src/assets/enemies/) — clases nuevas que heredan de
- *   EnemyBase, con `vision` en vez de `aggroRange` y loot/oro propios.
- * Ver skill enemy-definitions antes de tocar esto.
- */
-function getEnemyStats(type: string): NormalizedEnemyStats {
-  const legacy = ENEMY_TYPES[type];
-  if (legacy) return legacy;
-
-  const modern = ENEMY_DEFINITIONS[type];
-  if (modern) {
-    return {
-      name: modern.name,
-      hp: modern.hp,
-      attack: modern.attack,
-      defense: modern.defense,
-      xp: modern.xp,
-      aggroRange: modern.vision,
-      color: modern.color,
-      darkColor: modern.darkColor,
-      speed: modern.speed,
-    };
-  }
-
-  throw new Error(`Tipo de enemigo desconocido: "${type}"`);
-}
-
-function allEnemyTypeKeys(): string[] {
-  return [...Object.keys(ENEMY_TYPES), ...Object.keys(ENEMY_DEFINITIONS)];
-}
-
-/**
- * Crea una instancia de enemigo con stats escalados por piso — misma fórmula
- * que usaba antes `Dungeon.placeEnemies` inline. Centralizada acá para que
- * la población inicial de un piso y el reaparecido tras matar un enemigo
- * usen exactamente el mismo balance.
+ * Crea una instancia de enemigo con stats escalados por piso, eligiendo el
+ * tipo al azar entre ENEMY_DEFINITIONS (src/assets/enemies/) — única fuente
+ * de tipos de enemigo hoy. `vision` de la definición pasa a ser `aggroRange`
+ * en la instancia (el runtime existente usa ese nombre; ver skill
+ * enemy-definitions). Centralizada acá para que la población inicial de un
+ * piso y el reaparecido tras matar un enemigo usen el mismo balance.
  */
 export function createEnemyInstance(floor: number, x: number, y: number, id: string): EnemyInstance {
-  const enemyTypes = allEnemyTypeKeys();
-  const type = enemyTypes[Math.floor(Math.random() * enemyTypes.length)];
-  const def = getEnemyStats(type);
+  const types = Object.keys(ENEMY_DEFINITIONS);
+  const type = types[Math.floor(Math.random() * types.length)];
+  const def = ENEMY_DEFINITIONS[type];
 
   return {
     id,
@@ -79,7 +34,7 @@ export function createEnemyInstance(floor: number, x: number, y: number, id: str
     attack: Math.floor(def.attack * (1 + floor * 0.1)),
     defense: Math.floor(def.defense * (1 + floor * 0.1)),
     xp: def.xp,
-    aggroRange: def.aggroRange,
+    aggroRange: def.vision,
     color: def.color,
     darkColor: def.darkColor,
     speed: def.speed,

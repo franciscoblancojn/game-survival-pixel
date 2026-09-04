@@ -64,7 +64,7 @@ Diseño y roadmap del juego (fases, recetas, tipos de sala, etc.): [`INSTRUCCION
 | Movimiento | Turnos discretos, clic/tap en celda adyacente, WASD/flechas, swipe |
 | Combate | `daño = max(1, ATK - DEF + varianza(-1,0,+1))` |
 | Enemigos | Se mueven por toda la mazmorra; tope por piso = `6 + Math.ceil(piso / divisor)`; al morir uno, reaparece otro lejos del jugador |
-| Loot y oro | Cada tipo de enemigo (`src/assets/enemies/`) puede soltar items y oro al morir — hoy solo el slime |
+| Loot y oro | Cada tipo de enemigo (`src/assets/enemies/`: slime, rata, esqueleto) suelta items y oro propios al morir |
 | Muerte | Permadeath: al llegar a 0 hp (combate o hambre), se borra la ranura de guardado — sin opción de continuar |
 | Regeneración | Alimentado (hambre > 0): +1 hp cada 10 turnos, sin superar el máximo |
 | Dificultad | Fácil/Normal/Difícil, elegida al crear la partida — controla el divisor del tope de enemigos |

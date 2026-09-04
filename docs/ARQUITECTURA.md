@@ -111,15 +111,13 @@ Detalle completo, incluida la razón de cada decisión de diseño: skills `.clau
 
 ### Definiciones de enemigos por clase (`src/assets/enemies/`)
 
-Cada tipo de enemigo puede definirse como una clase que extiende `EnemyBase` (`enemigo_base.ts`): stats (`hp`, `defense`, `attack`), `vision` (rango de detección en casillas — en el runtime existente esto se sigue llamando `aggroRange`; el mapeo lo hace `SpawnSystem.getEnemyStats()`), `loot` (lista de posibles drops, cada uno con su propia probabilidad y rango de cantidad) y `gold` (rango de oro que suelta al morir, siempre cae, puede ser 0). Cada enemigo se registra por su `type` en `ENEMY_DEFINITIONS` (`index.ts`).
+Cada tipo de enemigo es una clase que extiende `EnemyBase` (`enemigo_base.ts`): stats (`hp`, `defense`, `attack`), `vision` (rango de detección en casillas — en el runtime existente esto se sigue llamando `aggroRange`; el mapeo lo hace `SpawnSystem.createEnemyInstance()`), `loot` (lista de posibles drops, cada uno con su propia probabilidad y rango de cantidad) y `gold` (rango de oro que suelta al morir, siempre cae, puede ser 0). Cada enemigo se registra por su `type` en `ENEMY_DEFINITIONS` (`index.ts`) — hoy `slime`, `rat` y `skeleton`, migración completa: el viejo `ENEMY_TYPES` plano (`constants.ts`) y el tipo `EnemyDef` se retiraron.
 
-Esta migración arrancó con un solo enemigo (`Slime`) a propósito — `rat` y `skeleton` siguen en el sistema legado (`ENEMY_TYPES`, `constants.ts`), sin loot ni oro, hasta que se pida migrarlos. Mientras conviven los dos sistemas:
-
-- `SpawnSystem.allEnemyTypeKeys()` combina las claves de ambos para elegir qué spawnear.
-- `TurnSystem.dropLoot()`, llamado al morir un enemigo, solo suelta oro/items si existe una entrada en `ENEMY_DEFINITIONS` — un enemigo legado no suelta nada (no es un bug, todavía no tiene loot definido).
+- `TurnSystem.dropLoot()`, llamado al morir un enemigo, tira oro + loot según su entrada en `ENEMY_DEFINITIONS` — el guard por "sin definición" es solo defensivo (guardado corrupto), ya no representa un caso normal.
 - El oro ganado se acumula en `player.gold` (persiste en la ranura de guardado, se ve en el HUD) — no hay tienda ni forma de gastarlo todavía.
+- `rat`/`skeleton` conservan los stats de combate que tenían en `ENEMY_TYPES`; `vision`/`loot`/`gold` son nuevos, elegidos a criterio siguiendo la progresión rata (más débil) < slime < esqueleto (más fuerte) también en oro/loot.
 
-Detalle completo: `.claude/skills/enemy-definitions/SKILL.md`.
+Detalle completo, incluida la tabla de valores de cada enemigo: `.claude/skills/enemy-definitions/SKILL.md`.
 
 ## 8. Muerte del jugador y permadeath
 

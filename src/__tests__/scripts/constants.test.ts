@@ -8,7 +8,6 @@ import {
   STORAGE_KEY,
   PLAYER_DEFAULTS,
   COLORS,
-  ENEMY_TYPES,
   ITEM_TYPES,
 } from "../../scripts/constants.ts";
 import { ENEMY_DEFINITIONS } from "../../assets/enemies/index.ts";
@@ -88,25 +87,32 @@ describe("constants", () => {
     });
   });
 
-  describe("ENEMY_TYPES", () => {
-    it("should have at least 3 enemy types combined with ENEMY_DEFINITIONS (rat/skeleton legado + slime migrado a src/assets/enemies/)", () => {
-      const total = Object.keys(ENEMY_TYPES).length + Object.keys(ENEMY_DEFINITIONS).length;
-      expect(total).toBeGreaterThanOrEqual(3);
-    });
-
-    it("no debe tener 'slime' — se migró a src/assets/enemies/slime.ts", () => {
-      expect(ENEMY_TYPES.slime).toBeUndefined();
+  // Todos los tipos de enemigo (rat, skeleton, slime) viven hoy en
+  // ENEMY_DEFINITIONS (src/assets/enemies/) — el viejo ENEMY_TYPES plano de
+  // constants.ts se retiró al terminar la migración. Ver skill
+  // enemy-definitions.
+  describe("ENEMY_DEFINITIONS (src/assets/enemies/)", () => {
+    it("should have at least 3 enemy types", () => {
+      expect(Object.keys(ENEMY_DEFINITIONS).length).toBeGreaterThanOrEqual(3);
     });
 
     it("should have rat with correct stats", () => {
-      expect(ENEMY_TYPES.rat.name).toBe("Rata");
-      expect(ENEMY_TYPES.rat.hp).toBe(15);
-      expect(ENEMY_TYPES.rat.attack).toBe(3);
+      expect(ENEMY_DEFINITIONS.rat.name).toBe("Rata");
+      expect(ENEMY_DEFINITIONS.rat.hp).toBe(15);
+      expect(ENEMY_DEFINITIONS.rat.attack).toBe(3);
     });
 
     it("should have skeleton with higher stats than rat", () => {
-      expect(ENEMY_TYPES.skeleton.hp).toBeGreaterThan(ENEMY_TYPES.rat.hp);
-      expect(ENEMY_TYPES.skeleton.attack).toBeGreaterThan(ENEMY_TYPES.rat.attack);
+      expect(ENEMY_DEFINITIONS.skeleton.hp).toBeGreaterThan(ENEMY_DEFINITIONS.rat.hp);
+      expect(ENEMY_DEFINITIONS.skeleton.attack).toBeGreaterThan(ENEMY_DEFINITIONS.rat.attack);
+    });
+
+    it("cada enemigo tiene loot y oro definidos (aunque loot pueda ser una lista vacía)", () => {
+      for (const def of Object.values(ENEMY_DEFINITIONS)) {
+        expect(Array.isArray(def.loot)).toBe(true);
+        expect(def.gold.min).toBeGreaterThanOrEqual(0);
+        expect(def.gold.max).toBeGreaterThanOrEqual(def.gold.min);
+      }
     });
   });
 

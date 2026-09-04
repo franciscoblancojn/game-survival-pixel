@@ -339,12 +339,34 @@ describe("TurnSystem — botín (loot/oro) al matar un enemigo", () => {
     expect(sawDrop).toBe(true); // con 100 intentos al 50% es prácticamente seguro
   });
 
-  it("un enemigo legado (rat, sin definición en src/assets/enemies/) no suelta oro ni items", () => {
+  it("una rata muerta suelta oro entre 0 y 5 (rango más bajo que el slime)", () => {
     const fakeGame = makeFakeGame();
     fakeGame.player.gold = 0;
     const rat = makeEnemy({ type: "rat", hp: 1, defense: 0 });
 
     killAdjacentEnemy(fakeGame, rat);
+
+    expect(fakeGame.player.gold).toBeGreaterThanOrEqual(0);
+    expect(fakeGame.player.gold).toBeLessThanOrEqual(5);
+  });
+
+  it("un esqueleto muerto suelta oro entre 3 y 15", () => {
+    const fakeGame = makeFakeGame();
+    fakeGame.player.gold = 0;
+    const skeleton = makeEnemy({ type: "skeleton", hp: 1, defense: 0 });
+
+    killAdjacentEnemy(fakeGame, skeleton);
+
+    expect(fakeGame.player.gold).toBeGreaterThanOrEqual(3);
+    expect(fakeGame.player.gold).toBeLessThanOrEqual(15);
+  });
+
+  it("un tipo de enemigo sin definición en ENEMY_DEFINITIONS no suelta oro ni items (guard defensivo)", () => {
+    const fakeGame = makeFakeGame();
+    fakeGame.player.gold = 0;
+    const unknown = makeEnemy({ type: "tipo_inexistente", hp: 1, defense: 0 });
+
+    killAdjacentEnemy(fakeGame, unknown);
 
     expect(fakeGame.player.gold).toBe(0);
     expect(fakeGame.dungeon.items).toHaveLength(0);

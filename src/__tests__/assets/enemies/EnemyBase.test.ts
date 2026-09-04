@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { EnemyBase } from "../../../assets/enemies/enemigo_base.ts";
 import { Slime } from "../../../assets/enemies/slime.ts";
+import { Rat } from "../../../assets/enemies/rat.ts";
+import { Skeleton } from "../../../assets/enemies/skeleton.ts";
 import { ENEMY_DEFINITIONS } from "../../../assets/enemies/index.ts";
 
 function makeBase(overrides: Partial<ConstructorParameters<typeof EnemyBase>[0]> = {}): EnemyBase {
@@ -122,15 +124,81 @@ describe("Slime — primer enemigo migrado a src/assets/enemies/", () => {
   }
 });
 
+describe("Rat — migrada desde ENEMY_TYPES (constants.ts)", () => {
+  it("conserva los stats que tenía en el sistema viejo", () => {
+    const rat = new Rat();
+    expect(rat.type).toBe("rat");
+    expect(rat.hp).toBe(15);
+    expect(rat.defense).toBe(0);
+    expect(rat.attack).toBe(3);
+    expect(rat.vision).toBe(4); // antes aggroRange: 4
+    expect(rat.xp).toBe(5);
+  });
+
+  it("suelta oro entre 0 y 5 (menos que el slime)", () => {
+    const rat = new Rat();
+    for (let i = 0; i < 100; i++) {
+      const gold = rat.rollGold();
+      expect(gold).toBeGreaterThanOrEqual(0);
+      expect(gold).toBeLessThanOrEqual(5);
+    }
+  });
+
+  it("tiene al menos una entrada de loot", () => {
+    expect(new Rat().loot.length).toBeGreaterThan(0);
+  });
+});
+
+describe("Skeleton — migrado desde ENEMY_TYPES (constants.ts)", () => {
+  it("conserva los stats que tenía en el sistema viejo", () => {
+    const skeleton = new Skeleton();
+    expect(skeleton.type).toBe("skeleton");
+    expect(skeleton.hp).toBe(30);
+    expect(skeleton.defense).toBe(2);
+    expect(skeleton.attack).toBe(6);
+    expect(skeleton.vision).toBe(6); // antes aggroRange: 6
+    expect(skeleton.xp).toBe(12);
+  });
+
+  it("es más fuerte que rat y suelta más oro (3-15 vs 0-5)", () => {
+    const skeleton = new Skeleton();
+    const rat = new Rat();
+    expect(skeleton.hp).toBeGreaterThan(rat.hp);
+    expect(skeleton.attack).toBeGreaterThan(rat.attack);
+    expect(skeleton.gold.min).toBeGreaterThan(rat.gold.min);
+    expect(skeleton.gold.max).toBeGreaterThan(rat.gold.max);
+  });
+
+  it("tiene al menos una entrada de loot", () => {
+    expect(new Skeleton().loot.length).toBeGreaterThan(0);
+  });
+});
+
 describe("ENEMY_DEFINITIONS — registro central", () => {
-  it("incluye a slime bajo la clave 'slime'", () => {
+  it("incluye los 3 enemigos migrados (slime, rat, skeleton)", () => {
     expect(ENEMY_DEFINITIONS.slime).toBeInstanceOf(Slime);
+    expect(ENEMY_DEFINITIONS.rat).toBeInstanceOf(Rat);
+    expect(ENEMY_DEFINITIONS.skeleton).toBeInstanceOf(Skeleton);
   });
 
   it("cada entrada es una instancia de EnemyBase con `type` igual a su clave en el registro", () => {
     for (const [key, def] of Object.entries(ENEMY_DEFINITIONS)) {
       expect(def).toBeInstanceOf(EnemyBase);
       expect(def.type).toBe(key);
+    }
+  });
+
+  it("cada entrada tiene loot y oro completos (nada a medio definir)", () => {
+    for (const def of Object.values(ENEMY_DEFINITIONS)) {
+      expect(Array.isArray(def.loot)).toBe(true);
+      expect(typeof def.gold.min).toBe("number");
+      expect(typeof def.gold.max).toBe("number");
+      expect(def.gold.max).toBeGreaterThanOrEqual(def.gold.min);
+      for (const entry of def.loot) {
+        expect(entry.chance).toBeGreaterThanOrEqual(0);
+        expect(entry.chance).toBeLessThanOrEqual(1);
+        expect(entry.max).toBeGreaterThanOrEqual(entry.min);
+      }
     }
   });
 });

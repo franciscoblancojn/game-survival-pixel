@@ -1,4 +1,4 @@
-import type { TileType, EnemyDef, ItemDef, Difficulty, DifficultySetting } from './types.js';
+import type { TileType, ItemDef, Difficulty, DifficultySetting } from './types.js';
 
 // === TILE TYPES ===
 export const TILE: Record<string, TileType> = {
@@ -97,34 +97,11 @@ export const COLORS = {
   overlay: 'rgba(10, 10, 20, 0.9)',
 } as const;
 
-// === ENEMY TYPES (legado — pendientes de migrar a src/assets/enemies/) ===
-// El slime ya se migró (src/assets/enemies/slime.ts, con vision/loot/oro) y
-// se removió de acá para no tener dos definiciones en conflicto. Ver skill
-// enemy-definitions antes de agregar o migrar una entrada.
-export const ENEMY_TYPES: Record<string, EnemyDef> = {
-  rat: {
-    name: 'Rata',
-    hp: 15,
-    attack: 3,
-    defense: 0,
-    xp: 5,
-    aggroRange: 4,
-    color: '#a0826d',
-    darkColor: '#7a624d',
-    speed: 1,
-  },
-  skeleton: {
-    name: 'Esqueleto',
-    hp: 30,
-    attack: 6,
-    defense: 2,
-    xp: 12,
-    aggroRange: 6,
-    color: '#d4cfc4',
-    darkColor: '#a4a094',
-    speed: 1,
-  },
-};
+// === ENEMY TYPES ===
+// Todos los enemigos (rat, skeleton, slime) ahora viven como clases en
+// src/assets/enemies/ (ENEMY_DEFINITIONS) — con vision/loot/oro. Este
+// registro plano se retiró al terminar la migración; ver skill
+// enemy-definitions antes de agregar un enemigo nuevo.
 
 // === ITEM TYPES ===
 export const ITEM_TYPES: Record<string, ItemDef> = {

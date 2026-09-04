@@ -113,9 +113,10 @@ export class TurnSystem {
 
   /**
    * Botín al morir un enemigo: oro (siempre, puede ser 0) + items en el
-   * suelo donde cayó, según su definición en src/assets/enemies/. Los
-   * enemigos legado (ENEMY_TYPES, sin migrar todavía) no sueltan nada — ver
-   * skill enemy-definitions.
+   * suelo donde cayó, según su definición en src/assets/enemies/. El guard
+   * de `def` inexistente es solo defensivo (p. ej. un `type` corrupto en un
+   * guardado viejo) — hoy todo enemigo tiene definición. Ver skill
+   * enemy-definitions.
    */
   private dropLoot(enemy: EnemyInstance): void {
     const def = ENEMY_DEFINITIONS[enemy.type];

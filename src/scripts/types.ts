@@ -48,17 +48,8 @@ export interface DifficultySetting {
 }
 
 // --- Enemy ---
-export interface EnemyDef {
-  name: string;
-  hp: number;
-  attack: number;
-  defense: number;
-  xp: number;
-  aggroRange: number;
-  color: string;
-  darkColor: string;
-  speed: number;
-}
+// (la definición estática de cada tipo de enemigo vive como clase en
+// src/assets/enemies/, no como interfaz plana acá — ver EnemyBaseStats ahí)
 
 export interface EnemyInstance {
   id: string;

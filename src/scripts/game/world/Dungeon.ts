@@ -198,9 +198,9 @@ export class Dungeon {
     for (let i = 0; i < 2; i++) {
       const pos = room.getRandomFloorPosition();
       if (Math.abs(pos.x - room.centerX) > 1 || Math.abs(pos.y - room.centerY) > 1) {
-        // Mismo camino que placeEnemies: elige entre ENEMY_TYPES (legado) y
-        // ENEMY_DEFINITIONS (src/assets/enemies/) — no hardcodear una lista
-        // de tipos acá, se desincroniza (ver skill enemy-definitions).
+        // Mismo camino que placeEnemies: elige de ENEMY_DEFINITIONS
+        // (src/assets/enemies/) — no hardcodear una lista de tipos acá, se
+        // desincroniza (ver skill enemy-definitions).
         this.enemies.push(createEnemyInstance(1, pos.x, pos.y, `enemy_${Date.now()}_${i}`));
       }
     }
