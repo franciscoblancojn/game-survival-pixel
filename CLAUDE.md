@@ -53,18 +53,19 @@ src/
 │   ├── Hub.ts                  # instancia `hub` (HP, hambre, nivel, stats) — expuesta en window.STATE
 │   └── index.astro             # expone window.STATE y dispara el render inicial
 ├── components/                 # UI por feature: <Nombre>/index.astro (markup) — ver regla 3
-│   ├── Hub, Inventory, Crafting, Minimap, Death, ConfirmDialog, BottomBar, Toast
+│   ├── Hub, Inventory, Crafting, Minimap, Death, ConfirmDialog, BottomBar, Toast, MainMenu, PauseMenu
 ├── scripts/
 │   ├── app.ts                  # entry point, instancia Game
-│   ├── constants.ts             # TILE, COLORS, STORAGE_KEY, STORAGE_VERSION, defaults
+│   ├── constants.ts             # TILE, COLORS, STORAGE_KEY, STORAGE_VERSION, SAVE_SLOT_COUNT, defaults
 │   ├── storage.ts               # capa localStorage genérica (legado de plantilla)
-│   ├── components/              # clases TS que gobiernan cada .astro (Hub.ts, Inventory.ts, ...)
+│   ├── components/              # clases TS que gobiernan cada .astro (Hub.ts, Inventory.ts, MainMenu.ts, ...)
 │   └── game/
-│       ├── Game.ts               # motor: estado, turnos, overlays, save/load (localStorage directo)
+│       ├── Game.ts               # motor: estado, turnos, overlays, menú, save/load por ranura
+│       ├── SaveSlots.ts           # 5 ranuras de guardado en localStorage (ver docs/ARQUITECTURA.md §4)
 │       ├── Renderer.ts, Input.ts
 │       ├── entities/ (Entity, Player)
 │       ├── world/ (Tile, Room, Dungeon)
-│       ├── systems/ (TurnSystem, CombatSystem)
+│       ├── systems/ (TurnSystem, CombatSystem, SpawnSystem)
 │       └── data/recipes.ts
 └── styles/main.css             # único CSS, inline en build
 android/                        # proyecto Gradle, WebView wrapper (MainActivity.java)
@@ -73,9 +74,19 @@ scripts/build-apk.mjs           # copia HTML a android/app/.../assets + corre Gr
 __tests__/                      # vitest + jsdom, ver `vitest.config.ts`
 ```
 
-## Sistema de estado (`StateBase<T>`)
+## Skills del proyecto — invócalas ANTES de tocar su área
 
-Antes de tocar `src/state/*` o `src/components/*`, invoca la skill `game-state` (`.claude/skills/game-state/`) — documenta el patrón `StateBase<T>` (onGet/onSet/onUpdateData/onRender) y la convención de IDs en el DOM.
+| Skill | Cuándo | Antes de tocar |
+|---|---|---|
+| `mazmorra-astro-android` | Build Astro→Android, pipeline de un solo HTML, convenciones de página única/componentes | `astro.config.mjs`, `scripts/`, `android/`, `src/pages/index.astro`, o al agregar un componente |
+| `game-state` | El patrón `StateBase<T>` (`src/state/`) — estado global tipo Hub, binding a DOM | `src/state/*.ts`, componentes que leen `window.STATE` |
+| `save-system` | Ranuras de guardado, menú principal (Nueva partida/Continuar), menú de pausa (Continuar/Salir), ciclo de vida de `Game.ts` | `SaveSlots.ts`, `Game.ts`, `MainMenu.ts`/`.astro`, `PauseMenu.ts`/`.astro` |
+| `map-generation` | Generación procedural de mazmorras: salas, pasillos, puertas, tipos de sala | `Dungeon.ts`, `Room.ts`, `Tile.ts` — sobre todo antes de tocar `carveCorridor` |
+| `enemy-spawning` | Población inicial de enemigos, tope máximo por piso, reaparición al matar uno | `SpawnSystem.ts`, `Dungeon.placeEnemies`, `TurnSystem.playerAttack` |
+| `difficulty` | Selección de dificultad (Fácil/Normal/Difícil), su persistencia y fórmulas de balance que dependen de ella | `DIFFICULTY_SETTINGS` en `constants.ts`, `Game.difficulty`, el paso de dificultad en `MainMenu.ts` |
+| `player-state` | HP/hambre/nivel del jugador, detección de muerte (combate o inanición), permadeath | `Player.ts`, `Entity.ts`, `TurnSystem.executeWorldEffects`/`executeEnemyTurns`, `Game.handleDeath` |
+
+## Sistema de estado (`StateBase<T>`)
 
 > **Nota conocida**: `src/components/Hub/index.astro` usa IDs compuestos (`hub-hp-text`, `hub-level-text`, …) y placeholders `__hub-hp__`, pero `StateBase.onUpdateData` busca un único elemento con `id === this.key` (`"hub"`) y reemplaza `__key__` (p. ej. `__hp__`, no `__hub-hp__`). Esto hace que varios tests en `src/__tests__/state/Hub.test.ts` fallen hoy (`bun run test`). Es trabajo en curso del propio usuario — no lo "arregles" de oficio; si te piden tocar esa zona, primero pregunta si quieren que la lógica de `onUpdateData` soporte IDs compuestos o si el HTML debe alinearse a la convención `{key}-{prop}` de `.opencode/skills/use-state` / `.claude/skills/game-state`.
 
@@ -85,7 +96,12 @@ Antes de tocar `src/state/*` o `src/components/*`, invoca la skill `game-state` 
 - **Movimiento**: turnos discretos por clic/tap en celda adyacente (distancia Manhattan = 1), WASD/flechas, swipe táctil.
 - **Combate**: `daño = max(1, ATK - DEF + varianza(-1,0,1))` (`CombatSystem.ts`).
 - **Crafteo**: 4 estaciones (banco, horno, yunque, mesón) — recetas en `game/data/recipes.ts`.
-- **Guardado**: automático (Game.ts) en localStorage, versionado por `STORAGE_VERSION`.
+- **Generación de mazmorras**: salas + pasillos procedurales por piso (`Dungeon.ts`) — ver skill `map-generation` antes de tocarla.
+- **Enemigos**: se mueven libremente por toda la mazmorra (no solo su sala de origen — `CombatSystem.ts` no restringe por sala). Tope de enemigos vivos por piso: `6 + Math.ceil(piso / divisor)` (`SpawnSystem.getMaxEnemies`); al morir uno, reaparece otro en otra parte lejos del jugador (`trySpawnReplacementEnemy`, disparado desde `TurnSystem.playerAttack`). Ver skill `enemy-spawning`.
+- **Dificultad**: se elige una sola vez al crear la partida (Fácil/Normal/Difícil, `MainMenu.ts` → `Game.startNewGame(slot, difficulty)`), persiste en la ranura de guardado, y hoy controla el divisor del tope de enemigos. Ver skill `difficulty`.
+- **Muerte y permadeath**: al llegar a 0 hp (combate o hambre en 0), `Game.handleDeath()` se dispara desde el único punto de chequeo al final de `TurnSystem.executePlayerAction` — antes NADIE lo llamaba (bug real, ya arreglado). Muestra la pantalla de muerte (sin botón "Continuar") y **borra la ranura de guardado** — permadeath, esa partida no se puede retomar. Ver skill `player-state`.
+- **Guardado**: 5 ranuras en localStorage (`SaveSlots.ts`), elegidas desde el menú principal Nueva partida/Continuar (`MainMenu.ts`); auto-guardado cada 30s + al cerrar sobre la ranura activa, versionado por `STORAGE_VERSION`. Ver skill `save-system`.
+- **Menú de pausa** (botón ⏸️ en la barra inferior, `PauseMenu.ts`): Continuar / Salir (guarda y vuelve al menú principal). `Game.state` pasa a `'paused'` mientras está abierto — bloquea input igual que inventario/crafteo, Escape lo cierra.
 
 Detalle completo del diseño y roadmap por fases: `INSTRUCCIONES.md`.
 

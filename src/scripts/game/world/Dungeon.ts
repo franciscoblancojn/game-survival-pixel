@@ -1,6 +1,7 @@
-import { TILE, MAP_WIDTH, MAP_HEIGHT, ENEMY_TYPES, ITEM_TYPES } from '../../constants.js';
+import { TILE, MAP_WIDTH, MAP_HEIGHT, ENEMY_TYPES, ITEM_TYPES, DEFAULT_DIFFICULTY } from '../../constants.js';
 import { Room } from './Room.js';
-import type { TileType, EnemyInstance, ItemInstance } from '../../types.js';
+import { getMaxEnemies, createEnemyInstance } from '../systems/SpawnSystem.js';
+import type { TileType, EnemyInstance, ItemInstance, Difficulty } from '../../types.js';
 
 export class Dungeon {
   public width: number;
@@ -65,7 +66,7 @@ export class Dungeon {
     if (idx !== -1) this.items.splice(idx, 1);
   }
 
-  generateLevel(floor: number): void {
+  generateLevel(floor: number, difficulty: Difficulty = DEFAULT_DIFFICULTY): void {
     this.floor = floor;
     this.initGrid();
     this.rooms = [];
@@ -127,16 +128,31 @@ export class Dungeon {
       room.writeTiles(this.grid);
     }
 
+    const connectedPairs = new Set<string>();
+    const pairKey = (a: Room, b: Room): string => {
+      const ia = this.rooms.indexOf(a);
+      const ib = this.rooms.indexOf(b);
+      return ia < ib ? `${ia}-${ib}` : `${ib}-${ia}`;
+    };
+
     for (let i = 0; i < this.rooms.length - 1; i++) {
       const roomA = this.rooms[i];
       const roomB = this.rooms[i + 1];
       this.connectRooms(roomA, roomB);
+      connectedPairs.add(pairKey(roomA, roomB));
     }
 
+    // Conexiones extra (crean loops) — evitamos volver a conectar un par de
+    // salas que ya está unido, para no carvar un segundo pasillo/puerta
+    // redundante hacia la misma sala vecina.
     for (let i = 0; i < Math.floor(this.rooms.length / 3); i++) {
       const a = this.rooms[Math.floor(Math.random() * this.rooms.length)];
       const b = this.rooms[Math.floor(Math.random() * this.rooms.length)];
-      if (a !== b) this.connectRooms(a, b);
+      if (a === b) continue;
+      const key = pairKey(a, b);
+      if (connectedPairs.has(key)) continue;
+      connectedPairs.add(key);
+      this.connectRooms(a, b);
     }
 
     for (const room of this.rooms) {
@@ -146,16 +162,13 @@ export class Dungeon {
       }
     }
 
-    for (const room of this.rooms) {
-      if (room.doors.length === 0) {
-        const side = ['north', 'south', 'east', 'west'][Math.floor(Math.random() * 4)];
-        const door = room.addDoor(side);
-        this.grid[door.y][door.x] = TILE.DOOR;
-        room.explored = true;
-      }
-    }
+    // No se agrega una "puerta de relleno" para salas sin `doors`: todas las
+    // salas ya quedaron conectadas por pasillos reales en el bucle de arriba
+    // (registrados vía registerCorridorDoor en carveCorridor). Añadir una
+    // puerta decorativa aquí era la causa de puertas que no llevan a ningún
+    // lado y de puertas dobles junto a una puerta real.
 
-    this.placeEnemies(floor);
+    this.placeEnemies(floor, difficulty);
     this.placeItems(floor);
 
     const lastRoom = this.rooms[this.rooms.length - 1];
@@ -252,6 +265,8 @@ export class Dungeon {
 
     let x = x1;
     let y = y1;
+    let prevX = x1;
+    let prevY = y1;
     const corridor: { x: number; y: number }[] = [];
 
     while (x !== x2 || y !== y2) {
@@ -260,10 +275,30 @@ export class Dungeon {
           this.grid[y][x] = TILE.CORRIDOR;
           corridor.push({ x, y });
         } else if (this.grid[y][x] === TILE.WALL) {
-          this.grid[y][x] = TILE.DOOR;
-          corridor.push({ x, y });
+          // Solo es una PUERTA si este muro es un cruce real hacia el
+          // interior de una sala: venimos de FLOOR (salimos de una sala) o
+          // el siguiente paso entra directo a FLOOR (entramos a otra). Si
+          // no, el pasillo está corriendo en PARALELO a un muro — p. ej.
+          // bordea el lateral de una sala que ni siquiera es el origen o
+          // destino de esta conexión — y convertir toda esa tira en puertas
+          // dejaba salas sin muro en ese lado (la causa real de las
+          // "puertas dobles"/múltiples que no llevan a ningún sitio).
+          // En ese caso lo abrimos igual para no cortar el camino, pero
+          // como pasillo, no como puerta.
+          const cameFromFloor = this.getTile(prevX, prevY) === TILE.FLOOR;
+          const entersFloor = this.getTile(x + dx, y + dy) === TILE.FLOOR;
+          if (cameFromFloor || entersFloor) {
+            this.grid[y][x] = TILE.DOOR;
+            corridor.push({ x, y });
+            this.registerCorridorDoor(x, y);
+          } else {
+            this.grid[y][x] = TILE.CORRIDOR;
+            corridor.push({ x, y });
+          }
         }
       }
+      prevX = x;
+      prevY = y;
       if (x !== x2) x += dx;
       else if (y !== y2) y += dy;
     }
@@ -273,10 +308,34 @@ export class Dungeon {
     }
   }
 
-  placeEnemies(floor: number): void {
-    const enemyTypes = Object.keys(ENEMY_TYPES);
+  /**
+   * Registra en `room.doors` una puerta que un pasillo acaba de carvar en el
+   * muro de esa sala (antes esto nunca pasaba: `carveCorridor` dibujaba la
+   * puerta en el grid pero jamás la anotaba en `Room.doors`, así que
+   * `generateLevel` creía que la sala no tenía puerta y le agregaba una
+   * decorativa en una posición aleatoria — sin pasillo detrás. Eso producía
+   * tanto puertas que no llevan a ningún lado como puertas dobles).
+   */
+  private registerCorridorDoor(x: number, y: number): void {
+    const room = this.rooms.find(r => r.contains(x, y));
+    if (!room) return;
+    if (room.doors.some(d => d.x === x && d.y === y)) return;
+
+    let side = 'north';
+    if (x === room.x) side = 'west';
+    else if (x === room.x + room.width - 1) side = 'east';
+    else if (y === room.y) side = 'north';
+    else if (y === room.y + room.height - 1) side = 'south';
+
+    room.doors.push({ x, y, side, connected: true });
+  }
+
+  placeEnemies(floor: number, difficulty: Difficulty = DEFAULT_DIFFICULTY): void {
+    const maxEnemies = getMaxEnemies(floor, difficulty);
 
     for (let i = 1; i < this.rooms.length; i++) {
+      if (this.enemies.length >= maxEnemies) break;
+
       const room = this.rooms[i];
       let count = 0;
 
@@ -286,28 +345,11 @@ export class Dungeon {
         count = 1 + Math.floor(Math.random() * 2);
       }
 
+      count = Math.min(count, maxEnemies - this.enemies.length);
+
       for (let j = 0; j < count; j++) {
         const pos = room.getRandomFloorPosition();
-        const type = enemyTypes[Math.floor(Math.random() * enemyTypes.length)];
-        const def = ENEMY_TYPES[type];
-
-        this.enemies.push({
-          id: `enemy_${floor}_${i}_${j}`,
-          type,
-          name: def.name,
-          x: pos.x,
-          y: pos.y,
-          hp: Math.floor(def.hp * (1 + floor * 0.15)),
-          maxHp: Math.floor(def.hp * (1 + floor * 0.15)),
-          attack: Math.floor(def.attack * (1 + floor * 0.1)),
-          defense: Math.floor(def.defense * (1 + floor * 0.1)),
-          xp: def.xp,
-          aggroRange: def.aggroRange,
-          color: def.color,
-          darkColor: def.darkColor,
-          speed: def.speed,
-          turnsUntilMove: 0,
-        });
+        this.enemies.push(createEnemyInstance(floor, pos.x, pos.y, `enemy_${floor}_${i}_${j}`));
       }
     }
   }

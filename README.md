@@ -35,7 +35,7 @@ src/
 ├── pages/index.astro              # única página del juego
 ├── layouts/BaseLayout.astro       # shell HTML mobile-first
 ├── state/                         # estado global (StateBase<T>) — ver docs/ARQUITECTURA.md
-├── components/                    # UI por feature (Hub, Inventory, Crafting, Minimap, Death, ...)
+├── components/                    # UI por feature (Hub, Inventory, Crafting, Minimap, Death, MainMenu, PauseMenu, ...)
 ├── scripts/
 │   ├── app.ts                      # entry point → instancia Game
 │   ├── constants.ts                 # TILE, COLORS, STORAGE_KEY, defaults
@@ -62,8 +62,12 @@ Diseño y roadmap del juego (fases, recetas, tipos de sala, etc.): [`INSTRUCCION
 | Tiles | `VOID`, `FLOOR`, `WALL`, `DOOR`, `CORRIDOR`, `STAIRS_DOWN/UP` |
 | Movimiento | Turnos discretos, clic/tap en celda adyacente, WASD/flechas, swipe |
 | Combate | `daño = max(1, ATK - DEF + varianza(-1,0,+1))` |
+| Enemigos | Se mueven por toda la mazmorra; tope por piso = `6 + Math.ceil(piso / divisor)`; al morir uno, reaparece otro lejos del jugador |
+| Muerte | Permadeath: al llegar a 0 hp (combate o hambre), se borra la ranura de guardado — sin opción de continuar |
+| Dificultad | Fácil/Normal/Difícil, elegida al crear la partida — controla el divisor del tope de enemigos |
 | Crafteo | 4 estaciones: banco de trabajo 🪵, horno 🔥, yunque 🔨, mesón 🧪 |
-| Guardado | Automático cada 30s + al cerrar, en `localStorage` |
+| Guardado | 5 ranuras en `localStorage`, menú Nueva partida/Continuar, auto-guardado cada 30s + al cerrar |
+| Menú de pausa | Botón ⏸️ en la barra inferior — Continuar / Salir (guarda y vuelve al menú principal) |
 
 ## Trabajar con Claude Code / agentes de IA
 

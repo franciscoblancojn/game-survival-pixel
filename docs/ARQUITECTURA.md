@@ -62,14 +62,21 @@ class StateBase<T> {
 
 **Detalle de implementación y una discrepancia conocida entre el binding de `Base.ts` y el HTML actual de `Hub/index.astro`** están documentados en la skill `.claude/skills/game-state/SKILL.md` — léela antes de tocar esta zona; no es un bug que deba "arreglarse de oficio" sin antes acordar con quien esté desarrollando esta parte cuál convención de IDs se usará.
 
-## 4. Persistencia — solo `localStorage`
+## 4. Persistencia — `localStorage` con 5 ranuras
 
-No hay backend. Dos capas conviven hoy:
+No hay backend. Tres piezas conviven hoy:
 
 - `src/scripts/storage.ts` — capa genérica heredada de la plantilla base (`loadData`/`saveData`/`resetData`), con su propio `StorageData` (tema, username). No está integrada con el guardado de partida real.
-- `src/scripts/game/Game.ts` — guardado real del progreso del juego (jugador, mazmorra, stats), auto-guardado cada 30s y al cerrar, leído/escrito directo con `localStorage.getItem/setItem` usando `STORAGE_KEY`/`STORAGE_VERSION` de `constants.ts`.
+- `src/scripts/game/SaveSlots.ts` — dueño de las claves de `localStorage` para las partidas: `SAVE_SLOT_COUNT` (5) ranuras, cada una en `mazmorra_save_slot_{n}`. Expone `listSlots`, `loadSlot`, `saveSlot`, `deleteSlot`, `firstFreeSlot` y `migrateLegacySave` (mueve la key vieja de antes de que existieran ranuras — `mazmorra_save` a secas — a la primera ranura libre, una sola vez).
+- `src/scripts/game/Game.ts` — guardado real del progreso (jugador, mazmorra, stats) contra la ranura activa (`game.currentSlot`), vía `SaveSlots`. Auto-guardado cada 30s y al cerrar mientras hay una partida activa; no auto-carga nada al abrir la página — eso lo decide el jugador en el menú principal.
 
-Si se necesita persistir un dato nuevo, decidir explícitamente en cuál de las dos capas vive antes de escribir código — no crear una tercera.
+**Menú principal** (`src/components/MainMenu/` + `src/scripts/components/MainMenu.ts`): pantalla inicial con "Nueva partida" / "Continuar". Al iniciar, `Game.init()` muestra este menú (`state = 'menu'`) y **no** construye el motor de juego (`Renderer`/`Input`/etc. — ver `Game.ensureEngine()`) hasta que el jugador elige una ranura; así cada partida nueva genera una mazmorra distinta en vez de recargar siempre la misma. Click en una ranura vacía (modo "Nueva") arranca ahí directo; click en una ranura ocupada pide confirmación (reutiliza `showConfirm` de `ConfirmDialog.ts`) antes de borrarla y empezar de cero — así es como se resuelve el caso de las 5 ranuras llenas.
+
+**Menú de pausa** (`src/components/PauseMenu/` + `src/scripts/components/PauseMenu.ts`): botón ⏸️ en la barra inferior, visible durante la partida. Abre un overlay con "Continuar" / "Salir" — Salir llama `saveGame()` y vuelve al menú principal (`exitToMenu()`), sin perder progreso. Mientras está abierto, `Game.state = 'paused'` bloquea el input igual que inventario/crafteo.
+
+Detalle completo del ciclo de vida de `Game.ts` y de estas dos pantallas: skill `.claude/skills/save-system/SKILL.md`. Generación de mazmorras (salas/pasillos/puertas): skill `.claude/skills/map-generation/SKILL.md`.
+
+Si se necesita persistir un dato nuevo, decidir explícitamente en cuál de las tres piezas vive antes de escribir código — no crear una cuarta.
 
 ## 5. Build → un solo HTML → APK Android
 
@@ -89,6 +96,33 @@ No introducir: imágenes externas, fuentes remotas (Google Fonts, CDNs), `fetch`
 
 `tsconfig.json` extiende `astro/tsconfigs/strict`. Todo el código nuevo va en `.ts` (o `<script>` dentro de `.astro`, tipado por el mismo `tsconfig`). Los `.js` que aparecen en documentación antigua (`README` original de la plantilla, `INSTRUCCIONES.md`) son legado de cuando el proyecto no usaba TypeScript — el código real ya vive en `.ts`; no crear archivos `.js` nuevos.
 
-## 7. Gobernanza del agente (Claude Code)
+## 7. Enemigos: población, tope y dificultad
+
+`src/scripts/game/systems/SpawnSystem.ts` centraliza la creación de enemigos (`createEnemyInstance`) y el tope de enemigos vivos por piso (`getMaxEnemies(floor, difficulty) = 6 + Math.ceil(floor / divisor)`). Se usa en dos momentos:
+
+- **Población inicial** de un piso recién generado — `Dungeon.placeEnemies(floor, difficulty)`, llamado desde `generateLevel`, corta la colocación de enemigos apenas llega al tope.
+- **Reaparición** — al morir un enemigo (`TurnSystem.playerAttack`), se llama `trySpawnReplacementEnemy`, que agrega uno nuevo en una celda caminable lejos del jugador (≥12 celdas Manhattan, relajando la distancia si el mapa es chico), solo si el piso sigue por debajo del tope.
+
+Los enemigos no están confinados a la sala donde aparecieron: `CombatSystem.ts` solo valida tile caminable + que no haya otro enemigo, así que pueden cruzar pasillos y otras salas libremente (la IA por `aggroRange` es lo único que acota cuánto se alejan de su punto de aparición sin que el jugador esté cerca).
+
+La **dificultad** (`Difficulty = 'easy' | 'normal' | 'hard'`, `DIFFICULTY_SETTINGS` en `constants.ts`) se elige una sola vez al crear la partida — último paso del flujo "Nueva partida" en `MainMenu.ts`, antes de `Game.startNewGame(slot, difficulty)` — y se persiste en la ranura de guardado (`GameSaveData.difficulty`). Hoy es el único parámetro que controla (el divisor del tope de enemigos); si se le suman más fórmulas de balance, van en el mismo `DIFFICULTY_SETTINGS`.
+
+Detalle completo, incluida la razón de cada decisión de diseño: skills `.claude/skills/enemy-spawning/SKILL.md` y `.claude/skills/difficulty/SKILL.md`.
+
+## 8. Muerte del jugador y permadeath
+
+Todo el daño al jugador (combate en `TurnSystem.executeEnemyTurns`, hambre en `TurnSystem.executeWorldEffects`) converge en un único chequeo al final de `TurnSystem.executePlayerAction`:
+
+```ts
+if (player.hp <= 0 && game.state !== 'dead') game.handleDeath();
+```
+
+Antes de esto, `Game.handleDeath()` existía pero **nunca se llamaba desde ningún lado** — el jugador podía quedar con 0 hp y seguir jugando indefinidamente, tanto por combate como por inanición (hambre en 0 → -1 hp por turno). Ahora es el único punto de detección, sin importar la causa del daño.
+
+`handleDeath()` implementa **permadeath**: guarda las stats finales en la pantalla de muerte, para el autosave, y **borra la ranura de guardado activa** (`deleteSlot`). La pantalla de muerte solo ofrece "Volver al menú" — no hay "Continuar", porque esa partida ya no existe. `saveGame()` tiene un guard (`state === 'dead'` → no-op) para que el autosave o `beforeunload` no puedan resucitar la ranura mientras el jugador todavía ve la pantalla de muerte.
+
+Detalle completo: `.claude/skills/player-state/SKILL.md`.
+
+## 9. Gobernanza del agente (Claude Code)
 
 `.claude/settings.json` bloquea `git add/commit/merge/push/rebase` para cualquier agente que opere sobre este repositorio (permission `deny` + hook `PreToolUse` sobre la tool `Bash`, cubre también comandos compuestos). El agente puede compilar, testear, editar y crear archivos libremente; el control de versiones (staging, commit, push) lo hace siempre una persona. Ver `CLAUDE.md` para el detalle y el razonamiento.

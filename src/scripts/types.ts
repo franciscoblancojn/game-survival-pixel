@@ -38,6 +38,15 @@ export interface ItemInstance {
   tool?: string;
 }
 
+// --- Dificultad ---
+export type Difficulty = 'easy' | 'normal' | 'hard';
+
+export interface DifficultySetting {
+  label: string;
+  /** Divisor de la fórmula de enemigos máximos: 6 + Math.ceil(piso / divisor). */
+  divisor: number;
+}
+
 // --- Enemy ---
 export interface EnemyDef {
   name: string;
@@ -114,6 +123,8 @@ export interface PlayerSaveData {
 // --- Game save data ---
 export interface GameSaveData {
   version: number;
+  savedAt: number;
+  difficulty: Difficulty;
   player: PlayerSaveData;
   dungeon: {
     floor: number;
@@ -127,6 +138,17 @@ export interface GameSaveData {
     enemiesKilled: number;
     deepestFloor: number;
   };
+}
+
+// --- Save slots (menu de Nueva partida / Continuar) ---
+export interface SlotSummary {
+  id: number;
+  empty: boolean;
+  floor?: number;
+  playerLevel?: number;
+  turn?: number;
+  savedAt?: number;
+  difficulty?: Difficulty;
 }
 
 // --- Crafting ---
@@ -156,7 +178,7 @@ export interface EnemyTurnResult {
 }
 
 // --- Game state ---
-export type GameState = 'exploring' | 'inventory' | 'crafting' | 'dead' | 'paused';
+export type GameState = 'menu' | 'exploring' | 'inventory' | 'crafting' | 'dead' | 'paused';
 
 // --- Particle ---
 export interface Particle {

@@ -1,4 +1,5 @@
 import { calculateDamage, damageEnemy, executeEnemyTurn } from './CombatSystem.js';
+import { trySpawnReplacementEnemy } from './SpawnSystem.js';
 import { TILE } from '../../constants.js';
 import type { PlayerAction } from '../../types.js';
 import type { Game } from '../Game.js';
@@ -74,6 +75,12 @@ export class TurnSystem {
       this.executeEnemyTurns();
       this.executeWorldEffects();
       this.game.turn++;
+
+      // Único punto que decide si el jugador murió este turno, sin importar
+      // la causa (combate o hambre) — ver skill player-state.
+      if (this.game.player.hp <= 0 && this.game.state !== 'dead') {
+        this.game.handleDeath();
+      }
     }
 
     return actionTaken;
@@ -93,6 +100,10 @@ export class TurnSystem {
         this.game.addMessage(`Subiste al nivel ${player.level}!`);
       }
       dungeon.removeEnemy(enemy);
+      // Reaparece un enemigo en otra parte de la mazmorra, lejos del
+      // jugador, mientras el piso no haya llegado al máximo para la
+      // dificultad activa (ver skill enemy-spawning).
+      trySpawnReplacementEnemy(dungeon, player, dungeon.floor, this.game.difficulty);
     }
 
     player.attackAnim = 8;
@@ -123,6 +134,7 @@ export class TurnSystem {
       if (result && result.type === 'attack') {
         this.game.addMessage(`${enemy.name} te ataca por ${result.damage} de daño`);
         player.hitAnim = 8;
+        if (player.hp <= 0) return; // el resto de enemigos no golpea un cadáver
       }
     }
   }

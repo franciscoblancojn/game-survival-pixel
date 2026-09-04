@@ -8,6 +8,8 @@ import Death from '../components/Death/index.astro';
 import ConfirmDialog from '../components/ConfirmDialog/index.astro';
 import BottomBar from '../components/BottomBar/index.astro';
 import Toast from '../components/Toast/index.astro';
+import MainMenu from '../components/MainMenu/index.astro';
+import PauseMenu from '../components/PauseMenu/index.astro';
 ---
 
 <BaseLayout title="Mazmorra">
@@ -21,6 +23,8 @@ import Toast from '../components/Toast/index.astro';
     <Death/>
     <ConfirmDialog/>
     <BottomBar/>
+    <MainMenu/>
+    <PauseMenu/>
   </div>
 
   <Toast/>
@@ -46,7 +50,10 @@ import Toast from '../components/Toast/index.astro';
           window.gameInstance.render();
         }
       });
-      
+      document.getElementById('btn-menu')?.addEventListener('click', () => {
+        window.gameInstance?.togglePauseMenu();
+      });
+
       // Inventory close button
       document.getElementById('inventory-close-btn')?.addEventListener('click', () => {
         window.gameInstance?.toggleInventory();

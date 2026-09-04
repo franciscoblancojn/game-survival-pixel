@@ -1,4 +1,4 @@
-import type { TileType, EnemyDef, ItemDef } from './types.js';
+import type { TileType, EnemyDef, ItemDef, Difficulty, DifficultySetting } from './types.js';
 
 // === TILE TYPES ===
 export const TILE: Record<string, TileType> = {
@@ -21,6 +21,7 @@ export const GAME_NAME = 'Mazmorra';
 export const GAME_VERSION = '0.1.0';
 export const STORAGE_KEY = 'mazmorra_save';
 export const STORAGE_VERSION = 1;
+export const SAVE_SLOT_COUNT = 5;
 
 // === PLAYER DEFAULTS ===
 export const PLAYER_DEFAULTS = {
@@ -37,6 +38,22 @@ export const PLAYER_DEFAULTS = {
 
 // === INVENTORY ===
 export const INVENTORY_SIZE = 24;
+
+// === DIFICULTAD ===
+// Enemigos máximos vivos por piso = MAX_ENEMIES_BASE + Math.ceil(piso / divisor).
+// A menor divisor, más rápido escala la cantidad de enemigos por piso.
+export const MAX_ENEMIES_BASE = 6;
+export const DEFAULT_DIFFICULTY: Difficulty = 'normal';
+
+export const DIFFICULTY_SETTINGS: Record<Difficulty, DifficultySetting> = {
+  easy: { label: 'Fácil', divisor: 5 },
+  normal: { label: 'Normal', divisor: 3 },
+  hard: { label: 'Difícil', divisor: 1 },
+};
+
+// === ESPAWNEO DE ENEMIGOS ===
+// Distancia Manhattan mínima deseada entre el jugador y un enemigo que reaparece.
+export const ENEMY_RESPAWN_MIN_DISTANCE = 12;
 
 // === COLORS (pixel art palette) ===
 export const COLORS = {

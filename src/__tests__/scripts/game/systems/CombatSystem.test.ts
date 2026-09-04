@@ -121,3 +121,110 @@ describe("TurnSystem — regresión: movimiento no debe romperse con enemigos vi
     expect(fakeGame.turn).toBe(1);
   });
 });
+
+// Regresión: Game.handleDeath() existía pero nada lo llamaba nunca — ni el
+// daño de combate ni el de hambre por debajo de 0 hp disparaban la muerte
+// (el jugador quedaba "vivo" con 0 hp, jugable indefinidamente). Ver skill
+// player-state.
+describe("TurnSystem — detección de muerte del jugador", () => {
+  function makeFakeGame(overrides: Partial<Game> = {}): Game {
+    return {
+      player: new Player(5, 5),
+      dungeon: new Dungeon(),
+      turn: 0,
+      state: "exploring",
+      difficulty: "normal",
+      addMessage: vi.fn(),
+      handleDeath: vi.fn(),
+      ...overrides,
+    } as unknown as Game;
+  }
+
+  it("llama handleDeath() cuando el jugador llega a 0 hp por un ataque enemigo", () => {
+    const fakeGame = makeFakeGame();
+    fakeGame.player.hp = 1;
+    fakeGame.dungeon.enemies = [makeEnemy({
+      x: fakeGame.player.x + 1, y: fakeGame.player.y,
+      attack: 999, defense: 0, aggroRange: 99, turnsUntilMove: 0,
+    })];
+
+    const turnSystem = new TurnSystem(fakeGame);
+    turnSystem.executePlayerAction({ type: "wait" });
+
+    expect(fakeGame.player.hp).toBe(0);
+    expect(fakeGame.handleDeath).toHaveBeenCalledTimes(1);
+  });
+
+  it("llama handleDeath() cuando el hambre en 0 baja el hp a 0", () => {
+    const fakeGame = makeFakeGame();
+    fakeGame.player.hp = 1;
+    fakeGame.player.hunger = 0;
+    fakeGame.dungeon.enemies = [];
+
+    const turnSystem = new TurnSystem(fakeGame);
+    turnSystem.executePlayerAction({ type: "wait" });
+
+    expect(fakeGame.player.hp).toBe(0);
+    expect(fakeGame.handleDeath).toHaveBeenCalledTimes(1);
+  });
+
+  it("con hambre en 0, el hp baja de a 1 por turno", () => {
+    const fakeGame = makeFakeGame();
+    fakeGame.player.hp = 5;
+    fakeGame.player.hunger = 0;
+    fakeGame.dungeon.enemies = [];
+    const turnSystem = new TurnSystem(fakeGame);
+
+    turnSystem.executePlayerAction({ type: "wait" });
+    expect(fakeGame.player.hp).toBe(4);
+
+    turnSystem.executePlayerAction({ type: "wait" });
+    expect(fakeGame.player.hp).toBe(3);
+  });
+
+  it("no llama handleDeath() mientras el jugador tenga hp > 0", () => {
+    const fakeGame = makeFakeGame();
+    fakeGame.dungeon.enemies = [];
+
+    const turnSystem = new TurnSystem(fakeGame);
+    turnSystem.executePlayerAction({ type: "wait" });
+
+    expect(fakeGame.handleDeath).not.toHaveBeenCalled();
+  });
+
+  it("no vuelve a llamar handleDeath() si el estado ya es 'dead'", () => {
+    const fakeGame = makeFakeGame({ state: "dead" });
+    fakeGame.player.hp = 0;
+    fakeGame.dungeon.enemies = [];
+
+    const turnSystem = new TurnSystem(fakeGame);
+    turnSystem.executePlayerAction({ type: "wait" });
+
+    expect(fakeGame.handleDeath).not.toHaveBeenCalled();
+  });
+
+  it("los enemigos restantes no golpean a un jugador ya muerto en la misma ronda", () => {
+    const fakeGame = makeFakeGame();
+    fakeGame.player.hp = 1;
+    const killer = makeEnemy({
+      id: "killer", x: fakeGame.player.x + 1, y: fakeGame.player.y,
+      attack: 999, defense: 0, aggroRange: 99, turnsUntilMove: 0,
+    });
+    const bystander = makeEnemy({
+      id: "bystander", x: fakeGame.player.x - 1, y: fakeGame.player.y,
+      attack: 1, defense: 0, aggroRange: 99, turnsUntilMove: 0,
+    });
+    fakeGame.dungeon.enemies = [killer, bystander];
+
+    const turnSystem = new TurnSystem(fakeGame);
+    turnSystem.executePlayerAction({ type: "wait" });
+
+    expect(fakeGame.player.hp).toBe(0);
+    expect(fakeGame.handleDeath).toHaveBeenCalledTimes(1);
+    // Solo debe haber un mensaje de ataque (el del killer) — el bystander
+    // nunca llega a jugar su turno porque el loop corta al morir el jugador.
+    const attackMessages = (fakeGame.addMessage as unknown as ReturnType<typeof vi.fn>).mock.calls
+      .filter(([msg]) => typeof msg === "string" && msg.includes("te ataca"));
+    expect(attackMessages).toHaveLength(1);
+  });
+});
