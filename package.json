@@ -11,10 +11,16 @@
     "dev": "astro dev",
     "build": "astro build && node scripts/post-build.mjs",
     "build:apk": "bun run build && node scripts/build-apk.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "preview": "astro preview",
     "astro": "astro"
   },
   "dependencies": {
     "astro": "^7.0.6"
+  },
+  "devDependencies": {
+    "jsdom": "^30.0.1",
+    "vitest": "^4.1.10"
   }
 }

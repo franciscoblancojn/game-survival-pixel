@@ -27,11 +27,14 @@ export class StateBase<
   }
 
   onUpdateData<K extends keyof T>(key: K) {
-    const element = document.getElementById(`${this.key}-${String(key)}`);
+    const element = document.getElementById(`${this.key}`);
     const value = this.data[key];
 
     if (element && value !== undefined && value !== null) {
-      element.innerHTML = this.onRenderData(key, value);
+      element.innerHTML = element.innerHTML.replaceAll(
+        `__${key as string}__`,
+        value as string,
+      );
     }
   }
 
@@ -43,9 +46,9 @@ export class StateBase<
     this.data[key] = value;
   }
 
-  onRender(){
-    Object.keys(this.data).forEach(key=>{
-      this.onUpdateData(key as keyof T)
-    })
+  onRender() {
+    Object.keys(this.data).forEach((key) => {
+      this.onUpdateData(key as keyof T);
+    });
   }
 }
