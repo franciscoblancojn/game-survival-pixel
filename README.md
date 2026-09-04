@@ -1,81 +1,76 @@
-# template-astro-android
+# Mazmorra
 
-Plantilla para crear aplicaciones Android usando Astro como generador de sitios estáticos, empaquetadas en un WebView.
-
-## Características
-
-- **SPA con 3 pantallas**: Home, About, Settings
-- **Navegación**: Bottom bar + swipe + teclado (1/2/3)
-- **Temas**: Light/Dark con CSS custom properties
-- **Persistencia**: localStorage con versionado
-- **Build optimizado**: Un solo archivo HTML autocontenido
-- **APK**: Empaquetado como Android WebView wrapper
-
-## Requisitos
-
-- Bun (package manager)
-- Node.js >= 22.12.0
-- Android SDK (para build de APK)
-- ImageMagick (opcional, para generar iconos)
+Roguelike de supervivencia en vista superior (top-down), estilo pixel art tipo *Pixel Dungeon*. Construido con **Astro + TypeScript**, empaquetado como **una sola página web** que compila también a **APK Android** (WebView). Sin backend: todo el progreso se guarda en `localStorage`.
 
 ## Comandos
 
 ```bash
 bun install           # Instalar dependencias
-bun run dev           # Servidor de desarrollo (localhost:4321)
-bun run build         # Build estático → dist/
-bun run build:apk     # Build + APK → dist/template-astro-android.apk
-bun run preview       # Preview del build
+bun run dev            # Servidor de desarrollo (http://localhost:4321)
+bun run build           # Build estático → dist/index.html (un solo archivo autocontenido)
+bun run build:apk       # Build + empaquetado Android → dist/mazmorra.apk
+bun run preview         # Preview del build de producción
+bun run test             # Tests (vitest)
+bun run test:watch       # Tests en modo watch
 ```
 
-> **IMPORTANTE**: Usar siempre `bun` como package manager. `npm install` está bloqueado intencionalmente.
+> **Package manager**: siempre `bun`. `npm install` está bloqueado intencionalmente (`scripts/no-npm.sh`).
+> **Node.js**: si necesitas usar `node`/`npm` directamente, se requiere >= 22.12.0.
+
+## Stack
+
+- **Astro** (SSG) + **TypeScript** estricto — sin frameworks de UI.
+- **Una sola página** (`src/pages/index.astro`): las pantallas (inventario, crafteo, minimapa, muerte, confirmaciones) son overlays sobre el mismo DOM, no rutas nuevas.
+- **Sistema de componentes**: cada feature de UI es un par `src/components/<Nombre>/index.astro` (markup) + `src/scripts/components/<Nombre>.ts` (lógica).
+- **Estado**: clase genérica `StateBase<T>` (`src/state/Base.ts`) con binding a DOM, expuesta globalmente en `window.STATE`.
+- **Motor de juego**: TS puro en `src/scripts/game/` (Canvas 2D, sprites programáticos con `ctx.fillRect`, turnos discretos).
+- **Persistencia**: `localStorage`, versionada (`STORAGE_KEY` / `STORAGE_VERSION`).
+- **Build**: Astro SSG → `scripts/post-build.mjs` inlinea todo el JS → un solo `index.html` autocontenido (CSS ya inline vía `astro.config.mjs`).
+- **Android**: wrapper WebView (`android/`), `scripts/build-apk.mjs` genera el APK con Gradle.
 
 ## Estructura
 
 ```
-├── src/
-│   ├── layouts/BaseLayout.astro    # Shell HTML optimizado para móvil
-│   ├── pages/index.astro           # SPA con 3 pantallas
-│   ├── scripts/
-│   │   ├── app.js                  # Entry point y orquestación
-│   │   ├── constants.js            # Constantes de la app
-│   │   ├── helpers.js              # Utilidades generales
-│   │   ├── storage.js              # Capa de persistencia
-│   │   └── components/
-│   │       ├── Toast.js            # Notificaciones
-│   │       └── ConfirmDialog.js    # Diálogo de confirmación
-│   └── styles/main.css             # Estilos globales (552 líneas)
+src/
+├── pages/index.astro              # única página del juego
+├── layouts/BaseLayout.astro       # shell HTML mobile-first
+├── state/                         # estado global (StateBase<T>) — ver docs/ARQUITECTURA.md
+├── components/                    # UI por feature (Hub, Inventory, Crafting, Minimap, Death, ...)
 ├── scripts/
-│   ├── post-build.mjs              # Inline JS en HTML
-│   └── build-apk.mjs              # Copia HTML + genera APK
-├── android/                        # Proyecto Android (WebView)
-├── public/                         # Assets estáticos
-├── astro.config.mjs                # Configuración Astro
-└── package.json
+│   ├── app.ts                      # entry point → instancia Game
+│   ├── constants.ts                 # TILE, COLORS, STORAGE_KEY, defaults
+│   ├── components/                  # clases TS de cada componente
+│   └── game/
+│       ├── Game.ts                   # motor: estado, turnos, overlays, save/load
+│       ├── Renderer.ts, Input.ts
+│       ├── entities/ (Entity, Player)
+│       ├── world/ (Tile, Room, Dungeon)
+│       ├── systems/ (TurnSystem, CombatSystem)
+│       └── data/recipes.ts
+└── styles/main.css                # único CSS del proyecto (pixel art, tema oscuro)
+android/                           # proyecto Android (Gradle + WebView)
+scripts/                           # post-build.mjs, build-apk.mjs
 ```
 
-## Arquitectura
+Detalle de arquitectura, sistema de estado y convenciones: [`docs/ARQUITECTURA.md`](docs/ARQUITECTURA.md).
+Diseño y roadmap del juego (fases, recetas, tipos de sala, etc.): [`INSTRUCCIONES.md`](INSTRUCCIONES.md).
 
-- **Framework**: Astro (SSG) + vanilla JS
-- **Empaquetado**: Android WebView (MainActivity.java)
-- **Persistencia**: localStorage con esquema versionado
-- **Navegación**: SPA manual con transiciones CSS
-- **Temas**: Light/Dark con CSS custom properties
-- **Build**: Un solo archivo HTML (CSS + JS inline)
+## Sistemas del juego (resumen)
 
-## Flujo de Build
+| Sistema | Detalle |
+|---|---|
+| Tiles | `VOID`, `FLOOR`, `WALL`, `DOOR`, `CORRIDOR`, `STAIRS_DOWN/UP` |
+| Movimiento | Turnos discretos, clic/tap en celda adyacente, WASD/flechas, swipe |
+| Combate | `daño = max(1, ATK - DEF + varianza(-1,0,+1))` |
+| Crafteo | 4 estaciones: banco de trabajo 🪵, horno 🔥, yunque 🔨, mesón 🧪 |
+| Guardado | Automático cada 30s + al cerrar, en `localStorage` |
 
-1. `astro build` genera archivos estáticos en `dist/`
-2. `post-build.mjs` inlinea todo el JS en `index.html`
-3. `build-apk.mjs` copia el HTML a Android assets y ejecuta Gradle
+## Trabajar con Claude Code / agentes de IA
 
-## Android
+Este repo incluye configuración de Claude Code en `.claude/` (`CLAUDE.md`, `settings.json`, `skills/`):
 
-El wrapper Android (`android/`) usa:
-- `compileSdk = 34`, `minSdk = 21`, `targetSdk = 34`
-- WebView con JavaScript y DOM Storage habilitados
-- Interfaz JS: `AndroidExporter` (downloadFile, closeApp, openDownloads)
-- Back button navega el historial del WebView
+- **Los agentes no pueden hacer `git add`, `commit`, `merge`, `push` ni `rebase`** en este repositorio — bloqueado por permisos y un hook `PreToolUse` en `.claude/settings.json`. El staging/commit/push siempre lo hace una persona, manualmente.
+- Convenciones de arquitectura (una página, sistema de componentes, TypeScript, `localStorage`) están descritas en `CLAUDE.md` y en las skills de `.claude/skills/`.
 
 ## Licencia
 
@@ -85,4 +80,3 @@ MIT
 
 - **Nombre:** Francisco Blanco
 - **Web:** https://franciscoblanco.vercel.app/
-- **Email:** blancofrancisco34@gmail.com

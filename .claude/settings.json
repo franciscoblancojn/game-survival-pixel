@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "permissions": {
+    "deny": [
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git merge *)",
+      "Bash(git push *)",
+      "Bash(git rebase *)",
+      "Bash(git reset --hard*)"
+    ],
+    "allow": [
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git show*)",
+      "Bash(git branch*)",
+      "Bash(bun *)",
+      "Bash(node scripts/*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cmd=$(jq -r '.tool_input.command // empty'); if printf '%s' \"$cmd\" | grep -qE '(^|[;&|]|&&|\\n)[[:space:]]*git[[:space:]]+(add|commit|merge|push|rebase)([[:space:]]|$)'; then jq -n --arg reason \"Bloqueado por politica del proyecto (.claude/settings.json): los comandos 'git add', 'git commit', 'git merge', 'git push' y 'git rebase' estan deshabilitados para agentes de IA en este repositorio. El usuario debe ejecutar estas acciones manualmente desde su propia terminal.\" '{hookSpecificOutput:{hookEventName:\"PreToolUse\",permissionDecision:\"deny\",permissionDecisionReason:$reason}}'; fi",
+            "statusMessage": "Verificando politica de git..."
+          }
+        ]
+      }
+    ]
+  }
+}
