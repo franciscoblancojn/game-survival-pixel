@@ -1,4 +1,4 @@
-import { TILE, MAP_WIDTH, MAP_HEIGHT, ENEMY_TYPES, ITEM_TYPES, DEFAULT_DIFFICULTY } from '../../constants.js';
+import { TILE, MAP_WIDTH, MAP_HEIGHT, ITEM_TYPES, DEFAULT_DIFFICULTY } from '../../constants.js';
 import { Room } from './Room.js';
 import { getMaxEnemies, createEnemyInstance } from '../systems/SpawnSystem.js';
 import type { TileType, EnemyInstance, ItemInstance, Difficulty } from '../../types.js';
@@ -198,25 +198,10 @@ export class Dungeon {
     for (let i = 0; i < 2; i++) {
       const pos = room.getRandomFloorPosition();
       if (Math.abs(pos.x - room.centerX) > 1 || Math.abs(pos.y - room.centerY) > 1) {
-        const type = ['rat', 'slime'][Math.floor(Math.random() * 2)];
-        const def = ENEMY_TYPES[type];
-        this.enemies.push({
-          id: `enemy_${Date.now()}_${i}`,
-          type,
-          name: def.name,
-          x: pos.x,
-          y: pos.y,
-          hp: def.hp,
-          maxHp: def.hp,
-          attack: def.attack,
-          defense: def.defense,
-          xp: def.xp,
-          aggroRange: def.aggroRange,
-          color: def.color,
-          darkColor: def.darkColor,
-          speed: def.speed,
-          turnsUntilMove: 0,
-        });
+        // Mismo camino que placeEnemies: elige entre ENEMY_TYPES (legado) y
+        // ENEMY_DEFINITIONS (src/assets/enemies/) — no hardcodear una lista
+        // de tipos acá, se desincroniza (ver skill enemy-definitions).
+        this.enemies.push(createEnemyInstance(1, pos.x, pos.y, `enemy_${Date.now()}_${i}`));
       }
     }
 

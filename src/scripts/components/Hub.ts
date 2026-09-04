@@ -53,6 +53,9 @@ export class Hub {
     const defenseEl = document.getElementById('hub-defense');
     if (defenseEl) defenseEl.textContent = `🛡️ ${player.getEffectiveDefense()}`;
 
+    const goldEl = document.getElementById('hub-gold');
+    if (goldEl) goldEl.textContent = `🪙 ${player.gold}`;
+
     const floorEl = document.getElementById('hub-floor');
     if (floorEl) floorEl.textContent = `📍 Piso ${floor}`;
 

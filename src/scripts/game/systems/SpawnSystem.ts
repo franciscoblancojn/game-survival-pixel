@@ -1,6 +1,7 @@
 import {
   ENEMY_TYPES, MAX_ENEMIES_BASE, DIFFICULTY_SETTINGS, ENEMY_RESPAWN_MIN_DISTANCE,
 } from '../../constants.js';
+import { ENEMY_DEFINITIONS } from '../../../assets/enemies/index.js';
 import { Tile } from '../world/Tile.js';
 import type { EnemyInstance, Difficulty } from '../../types.js';
 import type { Dungeon } from '../world/Dungeon.js';
@@ -12,6 +13,51 @@ export function getMaxEnemies(floor: number, difficulty: Difficulty): number {
   return MAX_ENEMIES_BASE + Math.ceil(floor / setting.divisor);
 }
 
+interface NormalizedEnemyStats {
+  name: string;
+  hp: number;
+  attack: number;
+  defense: number;
+  xp: number;
+  aggroRange: number;
+  color: string;
+  darkColor: string;
+  speed: number;
+}
+
+/**
+ * Une las dos fuentes de definiciones de enemigos que conviven hoy:
+ * - ENEMY_TYPES (constants.ts) — entradas viejas, planas, sin loot/oro.
+ * - ENEMY_DEFINITIONS (src/assets/enemies/) — clases nuevas que heredan de
+ *   EnemyBase, con `vision` en vez de `aggroRange` y loot/oro propios.
+ * Ver skill enemy-definitions antes de tocar esto.
+ */
+function getEnemyStats(type: string): NormalizedEnemyStats {
+  const legacy = ENEMY_TYPES[type];
+  if (legacy) return legacy;
+
+  const modern = ENEMY_DEFINITIONS[type];
+  if (modern) {
+    return {
+      name: modern.name,
+      hp: modern.hp,
+      attack: modern.attack,
+      defense: modern.defense,
+      xp: modern.xp,
+      aggroRange: modern.vision,
+      color: modern.color,
+      darkColor: modern.darkColor,
+      speed: modern.speed,
+    };
+  }
+
+  throw new Error(`Tipo de enemigo desconocido: "${type}"`);
+}
+
+function allEnemyTypeKeys(): string[] {
+  return [...Object.keys(ENEMY_TYPES), ...Object.keys(ENEMY_DEFINITIONS)];
+}
+
 /**
  * Crea una instancia de enemigo con stats escalados por piso — misma fórmula
  * que usaba antes `Dungeon.placeEnemies` inline. Centralizada acá para que
@@ -19,9 +65,9 @@ export function getMaxEnemies(floor: number, difficulty: Difficulty): number {
  * usen exactamente el mismo balance.
  */
 export function createEnemyInstance(floor: number, x: number, y: number, id: string): EnemyInstance {
-  const enemyTypes = Object.keys(ENEMY_TYPES);
+  const enemyTypes = allEnemyTypeKeys();
   const type = enemyTypes[Math.floor(Math.random() * enemyTypes.length)];
-  const def = ENEMY_TYPES[type];
+  const def = getEnemyStats(type);
 
   return {
     id,

@@ -109,6 +109,18 @@ La **dificultad** (`Difficulty = 'easy' | 'normal' | 'hard'`, `DIFFICULTY_SETTIN
 
 Detalle completo, incluida la razón de cada decisión de diseño: skills `.claude/skills/enemy-spawning/SKILL.md` y `.claude/skills/difficulty/SKILL.md`.
 
+### Definiciones de enemigos por clase (`src/assets/enemies/`)
+
+Cada tipo de enemigo puede definirse como una clase que extiende `EnemyBase` (`enemigo_base.ts`): stats (`hp`, `defense`, `attack`), `vision` (rango de detección en casillas — en el runtime existente esto se sigue llamando `aggroRange`; el mapeo lo hace `SpawnSystem.getEnemyStats()`), `loot` (lista de posibles drops, cada uno con su propia probabilidad y rango de cantidad) y `gold` (rango de oro que suelta al morir, siempre cae, puede ser 0). Cada enemigo se registra por su `type` en `ENEMY_DEFINITIONS` (`index.ts`).
+
+Esta migración arrancó con un solo enemigo (`Slime`) a propósito — `rat` y `skeleton` siguen en el sistema legado (`ENEMY_TYPES`, `constants.ts`), sin loot ni oro, hasta que se pida migrarlos. Mientras conviven los dos sistemas:
+
+- `SpawnSystem.allEnemyTypeKeys()` combina las claves de ambos para elegir qué spawnear.
+- `TurnSystem.dropLoot()`, llamado al morir un enemigo, solo suelta oro/items si existe una entrada en `ENEMY_DEFINITIONS` — un enemigo legado no suelta nada (no es un bug, todavía no tiene loot definido).
+- El oro ganado se acumula en `player.gold` (persiste en la ranura de guardado, se ve en el HUD) — no hay tienda ni forma de gastarlo todavía.
+
+Detalle completo: `.claude/skills/enemy-definitions/SKILL.md`.
+
 ## 8. Muerte del jugador y permadeath
 
 Todo el daño al jugador (combate en `TurnSystem.executeEnemyTurns`, hambre en `TurnSystem.executeWorldEffects`) converge en un único chequeo al final de `TurnSystem.executePlayerAction`:

@@ -293,3 +293,60 @@ describe("TurnSystem — regeneración de vida mientras está alimentado", () =>
     expect(fakeGame.player.hp).toBe(fakeGame.player.maxHp);
   });
 });
+
+// Botín al matar un enemigo — solo los definidos en src/assets/enemies/
+// (hoy, slime) sueltan oro/items; los enemigos legado (ENEMY_TYPES) no
+// tienen loot definido todavía. Ver skill enemy-definitions.
+describe("TurnSystem — botín (loot/oro) al matar un enemigo", () => {
+  function killAdjacentEnemy(fakeGame: Game, enemy: EnemyInstance): void {
+    enemy.x = fakeGame.player.x + 1;
+    enemy.y = fakeGame.player.y;
+    fakeGame.player.attack = 999; // un solo golpe lo mata
+    fakeGame.dungeon.enemies = [enemy];
+    new TurnSystem(fakeGame).playerAttack(enemy);
+  }
+
+  it("un slime muerto suelta oro entre 0 y 10 (siempre suma, nunca resta)", () => {
+    const fakeGame = makeFakeGame();
+    fakeGame.player.gold = 0;
+    const slime = makeEnemy({ type: "slime", hp: 1, defense: 0 });
+
+    killAdjacentEnemy(fakeGame, slime);
+
+    expect(fakeGame.player.gold).toBeGreaterThanOrEqual(0);
+    expect(fakeGame.player.gold).toBeLessThanOrEqual(10);
+  });
+
+  it("un slime muerto puede soltar 'bola de slime' en el suelo (1 a 3 unidades)", () => {
+    const fakeGame = makeFakeGame();
+    let sawDrop = false;
+
+    for (let i = 0; i < 100 && !sawDrop; i++) {
+      fakeGame.dungeon.items = [];
+      const slime = makeEnemy({ id: `slime_${i}`, type: "slime", hp: 1, defense: 0 });
+      killAdjacentEnemy(fakeGame, slime);
+
+      const drop = fakeGame.dungeon.items.find(it => it.type === "slime_ball");
+      if (drop) {
+        sawDrop = true;
+        expect(drop.quantity).toBeGreaterThanOrEqual(1);
+        expect(drop.quantity).toBeLessThanOrEqual(3);
+        expect(drop.x).toBe(slime.x);
+        expect(drop.y).toBe(slime.y);
+      }
+    }
+
+    expect(sawDrop).toBe(true); // con 100 intentos al 50% es prácticamente seguro
+  });
+
+  it("un enemigo legado (rat, sin definición en src/assets/enemies/) no suelta oro ni items", () => {
+    const fakeGame = makeFakeGame();
+    fakeGame.player.gold = 0;
+    const rat = makeEnemy({ type: "rat", hp: 1, defense: 0 });
+
+    killAdjacentEnemy(fakeGame, rat);
+
+    expect(fakeGame.player.gold).toBe(0);
+    expect(fakeGame.dungeon.items).toHaveLength(0);
+  });
+});

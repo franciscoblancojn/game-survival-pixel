@@ -1,7 +1,8 @@
 import { calculateDamage, damageEnemy, executeEnemyTurn } from './CombatSystem.js';
 import { trySpawnReplacementEnemy } from './SpawnSystem.js';
-import { TILE, HP_REGEN_INTERVAL_TURNS, HP_REGEN_AMOUNT } from '../../constants.js';
-import type { PlayerAction } from '../../types.js';
+import { TILE, HP_REGEN_INTERVAL_TURNS, HP_REGEN_AMOUNT, ITEM_TYPES } from '../../constants.js';
+import { ENEMY_DEFINITIONS } from '../../../assets/enemies/index.js';
+import type { PlayerAction, EnemyInstance, ItemInstance } from '../../types.js';
 import type { Game } from '../Game.js';
 
 export class TurnSystem {
@@ -86,7 +87,7 @@ export class TurnSystem {
     return actionTaken;
   }
 
-  playerAttack(enemy: import('../../types.js').EnemyInstance): void {
+  playerAttack(enemy: EnemyInstance): void {
     const { player, dungeon } = this.game;
     const damage = calculateDamage(player, enemy);
     const actual = damageEnemy(enemy, damage);
@@ -100,6 +101,7 @@ export class TurnSystem {
         this.game.addMessage(`Subiste al nivel ${player.level}!`);
       }
       dungeon.removeEnemy(enemy);
+      this.dropLoot(enemy);
       // Reaparece un enemigo en otra parte de la mazmorra, lejos del
       // jugador, mientras el piso no haya llegado al máximo para la
       // dificultad activa (ver skill enemy-spawning).
@@ -109,7 +111,47 @@ export class TurnSystem {
     player.attackAnim = 8;
   }
 
-  playerPickup(item: import('../../types.js').ItemInstance): void {
+  /**
+   * Botín al morir un enemigo: oro (siempre, puede ser 0) + items en el
+   * suelo donde cayó, según su definición en src/assets/enemies/. Los
+   * enemigos legado (ENEMY_TYPES, sin migrar todavía) no sueltan nada — ver
+   * skill enemy-definitions.
+   */
+  private dropLoot(enemy: EnemyInstance): void {
+    const def = ENEMY_DEFINITIONS[enemy.type];
+    if (!def) return;
+
+    const gold = def.rollGold();
+    if (gold > 0) {
+      this.game.player.gold += gold;
+      this.game.addMessage(`Encontraste ${gold} de oro`);
+    }
+
+    for (const drop of def.rollLoot()) {
+      const itemDef = ITEM_TYPES[drop.itemType];
+      if (!itemDef) continue;
+
+      const droppedItem: ItemInstance = {
+        id: `loot_${enemy.id}_${drop.itemType}_${Date.now()}`,
+        type: drop.itemType,
+        name: itemDef.name,
+        x: enemy.x,
+        y: enemy.y,
+        quantity: drop.quantity,
+        stackable: itemDef.stackable || false,
+        icon: itemDef.icon,
+        color: itemDef.color,
+        attack: itemDef.attack,
+        defense: itemDef.defense,
+        heal: itemDef.heal,
+        hunger: itemDef.hunger,
+      };
+      this.game.dungeon.items.push(droppedItem);
+      this.game.addMessage(`${enemy.name} soltó ${drop.quantity}x ${itemDef.name}`);
+    }
+  }
+
+  playerPickup(item: ItemInstance): void {
     const { player, dungeon } = this.game;
     const added = player.addItem(item);
     if (added) {

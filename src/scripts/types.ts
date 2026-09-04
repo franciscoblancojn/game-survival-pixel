@@ -79,6 +79,27 @@ export interface EnemyInstance {
   isAlive?: boolean;
 }
 
+// --- Loot y oro (botín de enemigos, ver src/assets/enemies/) ---
+export interface LootDrop {
+  /** Clave en ITEM_TYPES (constants.ts) */
+  itemType: string;
+  /** Probabilidad de que caiga, 0-1 */
+  chance: number;
+  /** Cantidad mínima y máxima si cae (inclusive) */
+  min: number;
+  max: number;
+}
+
+export interface GoldRange {
+  min: number;
+  max: number;
+}
+
+export interface RolledLoot {
+  itemType: string;
+  quantity: number;
+}
+
 // --- Room ---
 export interface RoomData {
   x: number;
@@ -116,6 +137,7 @@ export interface PlayerSaveData {
   level: number;
   xp: number;
   xpToLevel: number;
+  gold: number;
   inventory: ItemInstance[];
   equipment: Equipment;
 }

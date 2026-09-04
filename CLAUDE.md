@@ -48,6 +48,10 @@ Node >= 22.12.0 si se usa npm/node directo (no aplica si todo pasa por `bun`).
 src/
 ├── pages/index.astro          # única página — monta BaseLayout + todos los componentes
 ├── layouts/BaseLayout.astro   # shell HTML, meta mobile, importa main.css y src/state/index.astro
+├── assets/enemies/             # definiciones de enemigos por clase (ver skill enemy-definitions)
+│   ├── enemigo_base.ts          # clase EnemyBase — de la que heredan todos
+│   ├── slime.ts                  # un archivo por enemigo migrado (hp/defensa/ataque/vision/loot/oro)
+│   └── index.ts                  # ENEMY_DEFINITIONS — registro central
 ├── state/
 │   ├── Base.ts                 # StateBase<T> genérica: estado + binding a DOM por placeholders __key__
 │   ├── Hub.ts                  # instancia `hub` (HP, hambre, nivel, stats) — expuesta en window.STATE
@@ -85,6 +89,7 @@ __tests__/                      # vitest + jsdom, ver `vitest.config.ts`
 | `enemy-spawning` | Población inicial de enemigos, tope máximo por piso, reaparición al matar uno | `SpawnSystem.ts`, `Dungeon.placeEnemies`, `TurnSystem.playerAttack` |
 | `difficulty` | Selección de dificultad (Fácil/Normal/Difícil), su persistencia y fórmulas de balance que dependen de ella | `DIFFICULTY_SETTINGS` en `constants.ts`, `Game.difficulty`, el paso de dificultad en `MainMenu.ts` |
 | `player-state` | HP/hambre/nivel del jugador, detección de muerte (combate o inanición), permadeath | `Player.ts`, `Entity.ts`, `TurnSystem.executeWorldEffects`/`executeEnemyTurns`, `Game.handleDeath` |
+| `enemy-definitions` | Crear o actualizar un enemigo (stats, vision, loot, oro) en `src/assets/enemies/` | `enemigo_base.ts`, cualquier `<tipo>.ts` de enemigo, `index.ts` del registro, `TurnSystem.dropLoot` |
 
 ## Sistema de estado (`StateBase<T>`)
 
@@ -98,9 +103,11 @@ __tests__/                      # vitest + jsdom, ver `vitest.config.ts`
 - **Crafteo**: 4 estaciones (banco, horno, yunque, mesón) — recetas en `game/data/recipes.ts`.
 - **Generación de mazmorras**: salas + pasillos procedurales por piso (`Dungeon.ts`) — ver skill `map-generation` antes de tocarla.
 - **Enemigos**: se mueven libremente por toda la mazmorra (no solo su sala de origen — `CombatSystem.ts` no restringe por sala). Tope de enemigos vivos por piso: `6 + Math.ceil(piso / divisor)` (`SpawnSystem.getMaxEnemies`); al morir uno, reaparece otro en otra parte lejos del jugador (`trySpawnReplacementEnemy`, disparado desde `TurnSystem.playerAttack`). Ver skill `enemy-spawning`.
+- **Definiciones de enemigos** (`src/assets/enemies/`): sistema por clases (`EnemyBase` + una subclase por tipo, p. ej. `Slime`) con stats + `vision` (rango de detección, mapea a `aggroRange` en runtime) + `loot`/`oro` que suelta al morir. Convive con el sistema legado `ENEMY_TYPES` (`constants.ts`, rat/skeleton todavía sin migrar) — `SpawnSystem.ts` une ambos. Ver skill `enemy-definitions` antes de crear o migrar un enemigo.
 - **Dificultad**: se elige una sola vez al crear la partida (Fácil/Normal/Difícil, `MainMenu.ts` → `Game.startNewGame(slot, difficulty)`), persiste en la ranura de guardado, y hoy controla el divisor del tope de enemigos. Ver skill `difficulty`.
 - **Muerte y permadeath**: al llegar a 0 hp (combate o hambre en 0), `Game.handleDeath()` se dispara desde el único punto de chequeo al final de `TurnSystem.executePlayerAction` — antes NADIE lo llamaba (bug real, ya arreglado). Muestra la pantalla de muerte (sin botón "Continuar") y **borra la ranura de guardado** — permadeath, esa partida no se puede retomar. Ver skill `player-state`.
 - **Regeneración de vida**: mientras el jugador esté alimentado (`hunger > 0`), regenera 1 hp cada 10 turnos (`HP_REGEN_INTERVAL_TURNS`/`HP_REGEN_AMOUNT` en `constants.ts`, lógica en `TurnSystem.executeWorldEffects`); no regenera con hambre en 0 (ahí resta vida en su lugar). Ver skill `player-state`.
+- **Oro**: `player.gold` (persiste en la ranura de guardado, se muestra en el HUD junto a ataque/defensa). Solo entra por loot de enemigos definidos en `src/assets/enemies/` — no hay todavía tienda ni forma de gastarlo. Ver skill `enemy-definitions`.
 - **Guardado**: 5 ranuras en localStorage (`SaveSlots.ts`), elegidas desde el menú principal Nueva partida/Continuar (`MainMenu.ts`); auto-guardado cada 30s + al cerrar sobre la ranura activa, versionado por `STORAGE_VERSION`. Ver skill `save-system`.
 - **Menú de pausa** (botón ⏸️ en la barra inferior, `PauseMenu.ts`): Continuar / Salir (guarda y vuelve al menú principal). `Game.state` pasa a `'paused'` mientras está abierto — bloquea input igual que inventario/crafteo, Escape lo cierra.
 

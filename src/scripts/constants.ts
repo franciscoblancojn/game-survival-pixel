@@ -97,7 +97,10 @@ export const COLORS = {
   overlay: 'rgba(10, 10, 20, 0.9)',
 } as const;
 
-// === ENEMY TYPES ===
+// === ENEMY TYPES (legado — pendientes de migrar a src/assets/enemies/) ===
+// El slime ya se migró (src/assets/enemies/slime.ts, con vision/loot/oro) y
+// se removió de acá para no tener dos definiciones en conflicto. Ver skill
+// enemy-definitions antes de agregar o migrar una entrada.
 export const ENEMY_TYPES: Record<string, EnemyDef> = {
   rat: {
     name: 'Rata',
@@ -120,17 +123,6 @@ export const ENEMY_TYPES: Record<string, EnemyDef> = {
     color: '#d4cfc4',
     darkColor: '#a4a094',
     speed: 1,
-  },
-  slime: {
-    name: 'Slime',
-    hp: 45,
-    attack: 4,
-    defense: 1,
-    xp: 8,
-    aggroRange: 3,
-    color: '#2ecc71',
-    darkColor: '#27ae60',
-    speed: 2,
   },
 };
 
@@ -157,4 +149,6 @@ export const ITEM_TYPES: Record<string, ItemDef> = {
   stone: { name: 'Piedra', type: 'material', stackable: true, icon: '🪨', color: '#888' },
   iron_ore: { name: 'Hierro', type: 'material', stackable: true, icon: '⬛', color: '#666' },
   leather: { name: 'Cuero', type: 'material', stackable: true, icon: '🟫', color: '#8b4513' },
+  // Loot de enemigos (ver src/assets/enemies/)
+  slime_ball: { name: 'Bola de slime', type: 'material', stackable: true, icon: '🟢', color: '#2ecc71' },
 };

@@ -5,7 +5,8 @@ import {
 import { Dungeon } from "../../../../scripts/game/world/Dungeon.ts";
 import { Player } from "../../../../scripts/game/entities/Player.ts";
 import { Tile } from "../../../../scripts/game/world/Tile.ts";
-import { MAX_ENEMIES_BASE, ENEMY_RESPAWN_MIN_DISTANCE } from "../../../../scripts/constants.ts";
+import { MAX_ENEMIES_BASE, ENEMY_RESPAWN_MIN_DISTANCE, ENEMY_TYPES } from "../../../../scripts/constants.ts";
+import { ENEMY_DEFINITIONS } from "../../../../assets/enemies/index.ts";
 import type { Difficulty } from "../../../../scripts/types.ts";
 
 describe("SpawnSystem", () => {
@@ -55,6 +56,31 @@ describe("SpawnSystem", () => {
       const avgHpHigh = manyHigh.reduce((sum, e) => sum + e.maxHp, 0) / manyHigh.length;
 
       expect(avgHpHigh).toBeGreaterThan(avgHpLow);
+    });
+
+    // Regresión: slime se migró de ENEMY_TYPES (constants.ts) a
+    // ENEMY_DEFINITIONS (src/assets/enemies/) — createEnemyInstance debe
+    // seguir pudiendo elegirlo y usar su `vision` como `aggroRange`. Ver
+    // skill enemy-definitions.
+    it("puede generar un slime (definido en src/assets/enemies/, no en ENEMY_TYPES)", () => {
+      expect(ENEMY_TYPES.slime).toBeUndefined();
+
+      let sawSlime = false;
+      for (let i = 0; i < 300 && !sawSlime; i++) {
+        const enemy = createEnemyInstance(1, 0, 0, `try_${i}`);
+        if (enemy.type === "slime") sawSlime = true;
+      }
+      expect(sawSlime).toBe(true);
+    });
+
+    it("un slime recién creado usa vision(25) del registro como aggroRange en piso 1", () => {
+      let slimeInstance = null;
+      for (let i = 0; i < 300 && !slimeInstance; i++) {
+        const enemy = createEnemyInstance(1, 0, 0, `try_${i}`);
+        if (enemy.type === "slime") slimeInstance = enemy;
+      }
+      expect(slimeInstance).not.toBeNull();
+      expect(slimeInstance!.aggroRange).toBe(ENEMY_DEFINITIONS.slime.vision);
     });
   });
 

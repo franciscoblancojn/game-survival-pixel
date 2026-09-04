@@ -11,6 +11,7 @@ import {
   ENEMY_TYPES,
   ITEM_TYPES,
 } from "../../scripts/constants.ts";
+import { ENEMY_DEFINITIONS } from "../../assets/enemies/index.ts";
 
 describe("constants", () => {
   describe("TILE", () => {
@@ -88,8 +89,13 @@ describe("constants", () => {
   });
 
   describe("ENEMY_TYPES", () => {
-    it("should have at least 3 enemy types", () => {
-      expect(Object.keys(ENEMY_TYPES).length).toBeGreaterThanOrEqual(3);
+    it("should have at least 3 enemy types combined with ENEMY_DEFINITIONS (rat/skeleton legado + slime migrado a src/assets/enemies/)", () => {
+      const total = Object.keys(ENEMY_TYPES).length + Object.keys(ENEMY_DEFINITIONS).length;
+      expect(total).toBeGreaterThanOrEqual(3);
+    });
+
+    it("no debe tener 'slime' — se migró a src/assets/enemies/slime.ts", () => {
+      expect(ENEMY_TYPES.slime).toBeUndefined();
     });
 
     it("should have rat with correct stats", () => {

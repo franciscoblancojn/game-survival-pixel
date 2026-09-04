@@ -10,6 +10,7 @@ export class Player extends Entity {
   public level: number;
   public xp: number;
   public xpToLevel: number;
+  public gold: number;
 
   public inventory: ItemInstance[];
   public equipment: Equipment;
@@ -29,6 +30,7 @@ export class Player extends Entity {
     this.level = PLAYER_DEFAULTS.level;
     this.xp = PLAYER_DEFAULTS.xp;
     this.xpToLevel = PLAYER_DEFAULTS.xpToLevel;
+    this.gold = 0;
 
     this.inventory = [];
     this.equipment = {
@@ -172,6 +174,7 @@ export class Player extends Entity {
       hunger: this.hunger, maxHunger: this.maxHunger,
       attack: this.attack, defense: this.defense,
       level: this.level, xp: this.xp, xpToLevel: this.xpToLevel,
+      gold: this.gold,
       inventory: this.inventory,
       equipment: this.equipment,
     };
