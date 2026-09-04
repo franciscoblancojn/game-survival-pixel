@@ -17,9 +17,14 @@ export class Entity {
     this.dead = false;
   }
 
+  /**
+   * `amount` ya viene neto de defensa — CombatSystem.calculateDamage la resta
+   * una sola vez (ATK - DEF + varianza, ver INSTRUCCIONES.md § Combate).
+   * No restar `this.defense` de nuevo aquí.
+   */
   takeDamage(amount: number): number {
-    const actualDamage = Math.max(0, amount - this.defense);
-    this.hp = Math.max(0, this.hp - actualDamage);
+    const actualDamage = Math.min(this.hp, amount);
+    this.hp = Math.max(0, this.hp - amount);
     if (this.hp <= 0) {
       this.dead = true;
     }

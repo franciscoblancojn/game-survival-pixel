@@ -13,12 +13,27 @@ export function calculateDamage(
   return damage;
 }
 
+/**
+ * Los enemigos son datos planos (EnemyInstance), no instancias de Entity —
+ * no tienen takeDamage()/isAlive()/manhattanDistanceTo(). Esta función aplica
+ * daño directamente sobre sus propiedades, igual que Entity.takeDamage.
+ *
+ * `amount` ya viene neto de defensa (calculateDamage la resta una sola vez,
+ * ver fórmula en INSTRUCCIONES.md § Combate) — aquí solo se aplica al hp,
+ * sin volver a restar `enemy.defense`.
+ */
+export function damageEnemy(enemy: EnemyInstance, amount: number): number {
+  const actualDamage = Math.min(enemy.hp, amount);
+  enemy.hp = Math.max(0, enemy.hp - amount);
+  return actualDamage;
+}
+
 export function executeEnemyTurn(
   enemy: EnemyInstance,
   player: Player,
   dungeon: Dungeon
 ): EnemyTurnResult | null {
-  const dist = enemy.manhattanDistanceTo(player);
+  const dist = Math.abs(enemy.x - player.x) + Math.abs(enemy.y - player.y);
 
   if (dist <= 1) {
     const damage = calculateDamage(enemy, player);

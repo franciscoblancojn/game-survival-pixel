@@ -1,4 +1,4 @@
-import { calculateDamage, executeEnemyTurn } from './CombatSystem.js';
+import { calculateDamage, damageEnemy, executeEnemyTurn } from './CombatSystem.js';
 import { TILE } from '../../constants.js';
 import type { PlayerAction } from '../../types.js';
 import type { Game } from '../Game.js';
@@ -82,11 +82,11 @@ export class TurnSystem {
   playerAttack(enemy: import('../../types.js').EnemyInstance): void {
     const { player, dungeon } = this.game;
     const damage = calculateDamage(player, enemy);
-    const actual = enemy.takeDamage(damage);
+    const actual = damageEnemy(enemy, damage);
 
     this.game.addMessage(`Atacas a ${enemy.name} por ${actual} de daño`);
 
-    if (!enemy.isAlive()) {
+    if (enemy.hp <= 0) {
       this.game.addMessage(`${enemy.name} derrotado! +${enemy.xp} XP`);
       const leveled = player.addXP(enemy.xp);
       if (leveled) {
@@ -113,7 +113,7 @@ export class TurnSystem {
     const { player, dungeon } = this.game;
 
     for (const enemy of [...dungeon.enemies]) {
-      if (!enemy.isAlive()) continue;
+      if (enemy.hp <= 0) continue;
 
       enemy.turnsUntilMove--;
       if (enemy.turnsUntilMove > 0) continue;
