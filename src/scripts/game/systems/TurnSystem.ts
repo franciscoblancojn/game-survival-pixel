@@ -1,6 +1,6 @@
 import { calculateDamage, damageEnemy, executeEnemyTurn } from './CombatSystem.js';
 import { trySpawnReplacementEnemy } from './SpawnSystem.js';
-import { TILE } from '../../constants.js';
+import { TILE, HP_REGEN_INTERVAL_TURNS, HP_REGEN_AMOUNT } from '../../constants.js';
 import type { PlayerAction } from '../../types.js';
 import type { Game } from '../Game.js';
 
@@ -148,6 +148,14 @@ export class TurnSystem {
       player.hp = Math.max(0, player.hp - 1);
       if (player.hp <= 0) {
         this.game.addMessage('Moriste de hambre...');
+      }
+    } else if (player.hp < player.maxHp) {
+      // Regeneración pasiva: solo mientras el jugador está alimentado
+      // (hunger > 0). `this.game.turn` todavía no se incrementó para el
+      // turno que se está resolviendo — por eso +1 (ver skill player-state).
+      const turnJustCompleted = this.game.turn + 1;
+      if (turnJustCompleted % HP_REGEN_INTERVAL_TURNS === 0) {
+        player.hp = Math.min(player.maxHp, player.hp + HP_REGEN_AMOUNT);
       }
     }
 

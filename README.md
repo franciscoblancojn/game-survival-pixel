@@ -64,6 +64,7 @@ Diseño y roadmap del juego (fases, recetas, tipos de sala, etc.): [`INSTRUCCION
 | Combate | `daño = max(1, ATK - DEF + varianza(-1,0,+1))` |
 | Enemigos | Se mueven por toda la mazmorra; tope por piso = `6 + Math.ceil(piso / divisor)`; al morir uno, reaparece otro lejos del jugador |
 | Muerte | Permadeath: al llegar a 0 hp (combate o hambre), se borra la ranura de guardado — sin opción de continuar |
+| Regeneración | Alimentado (hambre > 0): +1 hp cada 10 turnos, sin superar el máximo |
 | Dificultad | Fácil/Normal/Difícil, elegida al crear la partida — controla el divisor del tope de enemigos |
 | Crafteo | 4 estaciones: banco de trabajo 🪵, horno 🔥, yunque 🔨, mesón 🧪 |
 | Guardado | 5 ranuras en `localStorage`, menú Nueva partida/Continuar, auto-guardado cada 30s + al cerrar |

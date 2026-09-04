@@ -39,6 +39,12 @@ export const PLAYER_DEFAULTS = {
 // === INVENTORY ===
 export const INVENTORY_SIZE = 24;
 
+// === REGENERACIÓN DE VIDA ===
+// Mientras el jugador esté alimentado (hunger > 0), regenera HP_REGEN_AMOUNT
+// de hp cada HP_REGEN_INTERVAL_TURNS turnos (sin superar maxHp).
+export const HP_REGEN_INTERVAL_TURNS = 10;
+export const HP_REGEN_AMOUNT = 1;
+
 // === DIFICULTAD ===
 // Enemigos máximos vivos por piso = MAX_ENEMIES_BASE + Math.ceil(piso / divisor).
 // A menor divisor, más rápido escala la cantidad de enemigos por piso.

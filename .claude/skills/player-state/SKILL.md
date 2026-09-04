@@ -1,6 +1,6 @@
 ---
 name: player-state
-description: Usar al tocar hp/hambre/nivel/xp del jugador, la detección de muerte, el permadeath (borrado de ranura al morir), o el daño por hambre. Invocar antes de modificar src/scripts/game/entities/Player.ts, Entity.ts, TurnSystem.executeWorldEffects/executeEnemyTurns, o Game.handleDeath.
+description: Usar al tocar hp/hambre/nivel/xp del jugador, la detección de muerte, el permadeath (borrado de ranura al morir), el daño por hambre o la regeneración pasiva de vida. Invocar antes de modificar src/scripts/game/entities/Player.ts, Entity.ts, TurnSystem.executeWorldEffects/executeEnemyTurns, o Game.handleDeath.
 ---
 
 # player-state — HP, hambre, nivel y muerte del jugador
@@ -21,7 +21,7 @@ description: Usar al tocar hp/hambre/nivel/xp del jugador, la detección de muer
 TurnSystem.executePlayerAction(action)
   → resuelve la acción (mover/atacar/recoger/esperar)
   → executeEnemyTurns()       # cada enemigo vivo puede atacar → player.takeDamage()
-  → executeWorldEffects()     # hambre -0.15; si hunger<=0, hp -= 1
+  → executeWorldEffects()     # hambre -0.15; si hunger<=0, hp -= 1; si no, regenera 1 hp cada 10 turnos
   → turn++
   → SI player.hp <= 0 Y game.state !== 'dead' → game.handleDeath()   # ← único punto de detección de muerte
 ```
@@ -45,6 +45,23 @@ if (player.hunger <= 0) {
 
 Esto corre en `executeWorldEffects()`, llamado una vez por cada acción que consume turno (mover, atacar, recoger, esperar) — no solo "moverse" en sentido estricto, cualquier acción que haga `actionTaken = true` en `executePlayerAction`. Si quisieras que el daño por hambre aplicara *solo* al moverse (excluyendo esperar/atacar), tendría que moverse este chequeo fuera de `executeWorldEffects` y condicionarlo por `action.type === 'move'` — no está así hoy a propósito: permitir "esperar" para esquivar el daño por hambre rompería la presión de recursos que el hambre está pensada para dar. No lo cambies sin que te lo pidan explícitamente.
 
+## Regeneración pasiva de vida
+
+```ts
+} else if (player.hp < player.maxHp) {
+  const turnJustCompleted = this.game.turn + 1;
+  if (turnJustCompleted % HP_REGEN_INTERVAL_TURNS === 0) {
+    player.hp = Math.min(player.maxHp, player.hp + HP_REGEN_AMOUNT);
+  }
+}
+```
+
+Vive en el mismo `if/else if` que el daño por hambre en `executeWorldEffects()` — son mutuamente excluyentes por diseño: **solo regenera mientras el jugador está alimentado** (`hunger > 0`; si está en 0, ese turno resta vida en vez de sumarla, nunca ambas cosas). `HP_REGEN_INTERVAL_TURNS` (10) y `HP_REGEN_AMOUNT` (1) están en `constants.ts` — no hardcodees estos números si tocás la fórmula.
+
+**Ojo con el `+1`**: `executeWorldEffects()` corre ANTES de `this.game.turn++` en `executePlayerAction`, así que `this.game.turn` todavía es el contador del turno anterior — `turnJustCompleted = this.game.turn + 1` es el número de turno que se está resolviendo en este momento. Si movés esta lógica a otro lado (p. ej. después del incremento), usá `this.game.turn % HP_REGEN_INTERVAL_TURNS` directo, sin el `+1` — pero no muevas el chequeo sin revisar los tests, que asumen la implementación actual (regenera en los turnos 10, 20, 30…, verificado con conteo real de turnos jugados, no con el valor crudo de `game.turn` en un instante arbitrario).
+
+Nunca supera `maxHp` (`Math.min`). No se loguea mensaje en el chat al regenerar (sería spam cada 10 turnos) — el cambio se ve solo en la barra de HP del HUD.
+
 ## Muerte y permadeath
 
 `Game.handleDeath()`:
@@ -67,4 +84,8 @@ Esto corre en `executeWorldEffects()`, llamado una vez por cada acción que cons
 
 ## Testing
 
-`src/__tests__/scripts/game/systems/CombatSystem.test.ts` § "TurnSystem — detección de muerte del jugador": cubre que `handleDeath()` se llama por daño de combate, por hambre, que el hp baja de a 1 por turno con hambre en 0, que no se llama con hp > 0, que no se duplica si `state` ya es `'dead'`, y que un enemigo "de más" en la misma ronda no golpea a un jugador ya muerto. Si tocás `executeWorldEffects`, `executeEnemyTurns` o `handleDeath`, corré `bun run test` — estos son el contrato de que la muerte se detecta siempre, exactamente una vez, sin importar la causa.
+`src/__tests__/scripts/game/systems/CombatSystem.test.ts`:
+- § "TurnSystem — detección de muerte del jugador": `handleDeath()` se llama por daño de combate, por hambre, que el hp baja de a 1 por turno con hambre en 0, que no se llama con hp > 0, que no se duplica si `state` ya es `'dead'`, y que un enemigo "de más" en la misma ronda no golpea a un jugador ya muerto.
+- § "TurnSystem — regeneración de vida mientras está alimentado": regenera exactamente en el turno 10 (no antes), otra vez en el turno 20, nunca mientras `hunger <= 0`, y nunca supera `maxHp`.
+
+Si tocás `executeWorldEffects`, `executeEnemyTurns` o `handleDeath`, corré `bun run test` — estos son el contrato de que la muerte se detecta siempre exactamente una vez sin importar la causa, y de que la regeneración pasiva respeta el intervalo y el requisito de estar alimentado.

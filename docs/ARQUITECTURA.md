@@ -121,6 +121,8 @@ Antes de esto, `Game.handleDeath()` existía pero **nunca se llamaba desde ning�
 
 `handleDeath()` implementa **permadeath**: guarda las stats finales en la pantalla de muerte, para el autosave, y **borra la ranura de guardado activa** (`deleteSlot`). La pantalla de muerte solo ofrece "Volver al menú" — no hay "Continuar", porque esa partida ya no existe. `saveGame()` tiene un guard (`state === 'dead'` → no-op) para que el autosave o `beforeunload` no puedan resucitar la ranura mientras el jugador todavía ve la pantalla de muerte.
 
+Mientras el jugador está alimentado (`hunger > 0`), `executeWorldEffects()` también regenera 1 hp cada 10 turnos (`HP_REGEN_INTERVAL_TURNS`/`HP_REGEN_AMOUNT`, `constants.ts`) — mutuamente excluyente con el daño por hambre: nunca las dos cosas el mismo turno, y nunca supera `maxHp`.
+
 Detalle completo: `.claude/skills/player-state/SKILL.md`.
 
 ## 9. Gobernanza del agente (Claude Code)

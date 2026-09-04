@@ -31,6 +31,19 @@ function makeEnemy(overrides: Partial<EnemyInstance> = {}): EnemyInstance {
   };
 }
 
+function makeFakeGame(overrides: Partial<Game> = {}): Game {
+  return {
+    player: new Player(5, 5),
+    dungeon: new Dungeon(),
+    turn: 0,
+    state: "exploring",
+    difficulty: "normal",
+    addMessage: vi.fn(),
+    handleDeath: vi.fn(),
+    ...overrides,
+  } as unknown as Game;
+}
+
 describe("CombatSystem", () => {
   describe("damageEnemy", () => {
     it("aplica el monto recibido tal cual (ya viene neto de defensa desde calculateDamage)", () => {
@@ -127,19 +140,6 @@ describe("TurnSystem — regresión: movimiento no debe romperse con enemigos vi
 // (el jugador quedaba "vivo" con 0 hp, jugable indefinidamente). Ver skill
 // player-state.
 describe("TurnSystem — detección de muerte del jugador", () => {
-  function makeFakeGame(overrides: Partial<Game> = {}): Game {
-    return {
-      player: new Player(5, 5),
-      dungeon: new Dungeon(),
-      turn: 0,
-      state: "exploring",
-      difficulty: "normal",
-      addMessage: vi.fn(),
-      handleDeath: vi.fn(),
-      ...overrides,
-    } as unknown as Game;
-  }
-
   it("llama handleDeath() cuando el jugador llega a 0 hp por un ataque enemigo", () => {
     const fakeGame = makeFakeGame();
     fakeGame.player.hp = 1;
@@ -226,5 +226,70 @@ describe("TurnSystem — detección de muerte del jugador", () => {
     const attackMessages = (fakeGame.addMessage as unknown as ReturnType<typeof vi.fn>).mock.calls
       .filter(([msg]) => typeof msg === "string" && msg.includes("te ataca"));
     expect(attackMessages).toHaveLength(1);
+  });
+});
+
+// Regeneración pasiva: 1 hp cada 10 turnos, solo mientras el jugador está
+// alimentado (hunger > 0). Ver skill player-state.
+describe("TurnSystem — regeneración de vida mientras está alimentado", () => {
+  function playTurns(turnSystem: TurnSystem, count: number): void {
+    for (let i = 0; i < count; i++) {
+      turnSystem.executePlayerAction({ type: "wait" });
+    }
+  }
+
+  it("regenera 1 hp exactamente en el turno 10, no antes", () => {
+    const fakeGame = makeFakeGame();
+    fakeGame.player.hp = 50;
+    fakeGame.player.maxHp = 100;
+    fakeGame.player.hunger = 100;
+    fakeGame.dungeon.enemies = [];
+    const turnSystem = new TurnSystem(fakeGame);
+
+    playTurns(turnSystem, 9);
+    expect(fakeGame.player.hp).toBe(50);
+
+    playTurns(turnSystem, 1); // turno 10
+    expect(fakeGame.player.hp).toBe(51);
+  });
+
+  it("regenera de nuevo en el turno 20 (cada 10 turnos, no una sola vez)", () => {
+    const fakeGame = makeFakeGame();
+    fakeGame.player.hp = 50;
+    fakeGame.player.maxHp = 100;
+    fakeGame.player.hunger = 100;
+    fakeGame.dungeon.enemies = [];
+    const turnSystem = new TurnSystem(fakeGame);
+
+    playTurns(turnSystem, 20);
+
+    expect(fakeGame.player.hp).toBe(52);
+    expect(fakeGame.turn).toBe(20);
+  });
+
+  it("no regenera mientras el jugador está sin comida (hunger <= 0)", () => {
+    const fakeGame = makeFakeGame();
+    fakeGame.player.hp = 50;
+    fakeGame.player.maxHp = 100;
+    fakeGame.player.hunger = 0;
+    fakeGame.dungeon.enemies = [];
+    const turnSystem = new TurnSystem(fakeGame);
+
+    // Con hambre en 0 el turno 10 debería restar vida (inanición), no sumarla.
+    playTurns(turnSystem, 10);
+
+    expect(fakeGame.player.hp).toBe(40);
+  });
+
+  it("no supera maxHp al regenerar", () => {
+    const fakeGame = makeFakeGame();
+    fakeGame.player.hp = fakeGame.player.maxHp;
+    fakeGame.player.hunger = 100;
+    fakeGame.dungeon.enemies = [];
+    const turnSystem = new TurnSystem(fakeGame);
+
+    playTurns(turnSystem, 10);
+
+    expect(fakeGame.player.hp).toBe(fakeGame.player.maxHp);
   });
 });
