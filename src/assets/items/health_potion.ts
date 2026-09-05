@@ -11,7 +11,7 @@ export class HealthPotion extends ItemBase {
       icon: '🧪',
       color: '#ff6b6b',
       efectoUso: { vida: 30 },
-      crafteo: { wood: 2, stone: 1 },
+      crafteo: { slime_ball: 10 },
       estacion: 'alchemy',
     });
   }
