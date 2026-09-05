@@ -1,5 +1,7 @@
 import { TILE, CELL_SIZE, COLORS, STORAGE_VERSION, DEFAULT_DIFFICULTY } from '../constants.js';
 import { Dungeon } from './world/Dungeon.js';
+import { Room } from './world/Room.js';
+import type { FloorState } from './world/Dungeon.js';
 import { Player } from './entities/Player.js';
 import { Renderer } from './Renderer.js';
 import { Input } from './Input.js';
@@ -13,7 +15,7 @@ import { MarketUI } from '../components/MarketUI.js';
 import { MainMenu } from '../components/MainMenu.js';
 import { PauseMenu } from '../components/PauseMenu.js';
 import { loadSlot, saveSlot, deleteSlot, migrateLegacySave } from './SaveSlots.js';
-import type { GameState, GameSaveData, Difficulty, NpcInstance } from '../types.js';
+import type { GameState, GameSaveData, DungeonSaveData, Difficulty, NpcInstance } from '../types.js';
 
 export class Game {
   public canvas: HTMLCanvasElement;
@@ -363,7 +365,10 @@ export class Game {
     const newFloor = this.dungeon.floor + 1;
     this.deepestFloor = Math.max(this.deepestFloor, newFloor);
 
-    this.dungeon.generateLevel(newFloor, this.difficulty);
+    // goToFloor() cachea el piso que se abandona y restaura el de destino
+    // tal cual quedó si ya se había visitado — nunca genera dos veces el
+    // mismo piso. Ver skill npc-trading.
+    this.dungeon.goToFloor(newFloor, this.difficulty);
 
     const startRoom = this.dungeon.rooms[0];
     const landing = this.dungeon.stairsUpPos ?? { x: startRoom.centerX, y: startRoom.centerY };
@@ -377,17 +382,15 @@ export class Game {
 
   /**
    * Sube un piso. Desde el piso 1 no hay piso 0 procedural — lleva al
-   * mercado (Dungeon.generateMarket()), un piso fijo con los NPCs para
-   * comerciar. Aparece en la escalera de bajada del piso nuevo.
+   * mercado (Dungeon.generateMarket(), disparado por goToFloor cuando el
+   * destino es 0), un piso fijo con los NPCs para comerciar. Aparece en la
+   * escalera de bajada del piso nuevo.
    */
   goUpStairs(): void {
-    if (this.dungeon.floor <= 1) {
-      this.addMessage('Subes hacia la superficie...');
-      this.dungeon.generateMarket();
-    } else {
-      this.addMessage('Subes las escaleras...');
-      this.dungeon.generateLevel(this.dungeon.floor - 1, this.difficulty);
-    }
+    const newFloor = this.dungeon.floor <= 1 ? 0 : this.dungeon.floor - 1;
+    this.addMessage(newFloor === 0 ? 'Subes hacia la superficie...' : 'Subes las escaleras...');
+
+    this.dungeon.goToFloor(newFloor, this.difficulty);
 
     const firstRoom = this.dungeon.rooms[0];
     const landing = this.dungeon.stairsDownPos ?? { x: firstRoom.centerX, y: firstRoom.centerY };
@@ -401,34 +404,61 @@ export class Game {
 
   // === PERSISTENCE (ranuras de guardado) ===
 
+  /** FloorState (rooms como instancias reales) → forma serializable (rooms como RoomData). */
+  private static floorStateToSaveData(state: FloorState): DungeonSaveData {
+    return {
+      floor: state.floor,
+      grid: state.grid,
+      rooms: state.rooms.map(r => r.toData()),
+      enemies: state.enemies,
+      items: state.items,
+      npcs: state.npcs,
+    };
+  }
+
+  /** Forma serializable → FloorState (rooms reconstruidas como instancias reales de Room). */
+  private static saveDataToFloorState(data: DungeonSaveData): FloorState {
+    return {
+      floor: data.floor,
+      grid: data.grid,
+      rooms: data.rooms.map(r => Room.fromData(r)),
+      enemies: data.enemies,
+      items: data.items,
+      npcs: data.npcs ?? [],
+    };
+  }
+
   saveGame(): void {
     // El guard de 'dead' evita resucitar la ranura que handleDeath() ya
     // borró — sin esto, el autosave (30s) o beforeunload podrían volver a
     // escribirla mientras el jugador sigue mirando la pantalla de muerte.
     if (this.currentSlot === null || this.state === 'dead') return;
     try {
+      const floors: Record<number, DungeonSaveData> = {};
+      for (const [floor, state] of this.dungeon.floorCache) {
+        floors[floor] = Game.floorStateToSaveData(state);
+      }
+
       const data: GameSaveData = {
         version: STORAGE_VERSION,
         savedAt: Date.now(),
         difficulty: this.difficulty,
         player: this.player.toJSON(),
-        dungeon: {
+        dungeon: Game.floorStateToSaveData({
           floor: this.dungeon.floor,
           grid: this.dungeon.grid,
-          rooms: this.dungeon.rooms.map(r => ({
-            x: r.x, y: r.y, width: r.width, height: r.height,
-            type: r.type, doors: r.doors, explored: r.explored,
-          })),
+          rooms: this.dungeon.rooms,
           enemies: this.dungeon.enemies,
           items: this.dungeon.items,
           npcs: this.dungeon.npcs,
-        },
+        }),
         stats: {
           turn: this.turn,
           enemiesKilled: this.enemiesKilled,
           deepestFloor: this.deepestFloor,
         },
         market: this.market.toJSON(),
+        floors,
       };
       saveSlot(this.currentSlot, data);
     } catch (e) {
@@ -443,24 +473,24 @@ export class Game {
 
       this.difficulty = data.difficulty ?? DEFAULT_DIFFICULTY;
       this.player = Player.fromJSON(data.player);
-      this.dungeon.grid = data.dungeon.grid;
-      this.dungeon.floor = data.dungeon.floor;
-      this.dungeon.enemies = data.dungeon.enemies;
-      this.dungeon.items = data.dungeon.items;
-      this.dungeon.npcs = data.dungeon.npcs ?? [];
-      this.dungeon.recomputeStairsFromGrid();
       this.market.fromJSON(data.market);
-      this.dungeon.rooms = data.dungeon.rooms.map(r => {
-        const room = { ...r, enemies: [] as unknown[], items: [] as unknown[], workStations: [] as unknown[] } as import('./world/Room.js').Room & { contains: (x: number, y: number) => boolean; getRandomFloorPosition: () => { x: number; y: number }; centerX: number; centerY: number };
-        room.contains = (x: number, y: number) => x >= r.x && x < r.x + r.width && y >= r.y && y < r.y + r.height;
-        room.getRandomFloorPosition = () => ({
-          x: r.x + 1 + Math.floor(Math.random() * (r.width - 2)),
-          y: r.y + 1 + Math.floor(Math.random() * (r.height - 2)),
-        });
-        room.centerX = Math.floor(r.x + r.width / 2);
-        room.centerY = Math.floor(r.y + r.height / 2);
-        return room as unknown as import('./world/Room.js').Room;
-      });
+
+      const active = Game.saveDataToFloorState(data.dungeon);
+      this.dungeon.floor = active.floor;
+      this.dungeon.grid = active.grid;
+      this.dungeon.rooms = active.rooms;
+      this.dungeon.enemies = active.enemies;
+      this.dungeon.items = active.items;
+      this.dungeon.npcs = active.npcs;
+      this.dungeon.recomputeStairsFromGrid();
+
+      // Pisos ya visitados (ausente en guardados de antes de este sistema
+      // de caché — sin esto, no hay pisos cacheados todavía y subir/bajar
+      // vuelve a generar cada uno, como antes).
+      this.dungeon.floorCache = new Map();
+      for (const [key, floorData] of Object.entries(data.floors ?? {})) {
+        this.dungeon.floorCache.set(Number(key), Game.saveDataToFloorState(floorData));
+      }
 
       this.turn = data.stats.turn;
       this.enemiesKilled = data.stats.enemiesKilled;

@@ -143,21 +143,27 @@ export interface PlayerSaveData {
   equipment: Equipment;
 }
 
+// --- Piso serializado (el activo, en GameSaveData.dungeon, y cada uno
+// cacheado en GameSaveData.floors) — stairsUpPos/stairsDownPos NO se
+// guardan, se recalculan del grid con Dungeon.recomputeStairsFromGrid() al
+// cargar (ver skill npc-trading). ---
+export interface DungeonSaveData {
+  floor: number;
+  grid: TileType[][];
+  rooms: RoomData[];
+  enemies: EnemyInstance[];
+  items: ItemInstance[];
+  /** Ausente en guardados viejos (piso sin mercado todavía). */
+  npcs?: NpcInstance[];
+}
+
 // --- Game save data ---
 export interface GameSaveData {
   version: number;
   savedAt: number;
   difficulty: Difficulty;
   player: PlayerSaveData;
-  dungeon: {
-    floor: number;
-    grid: TileType[][];
-    rooms: RoomData[];
-    enemies: EnemyInstance[];
-    items: ItemInstance[];
-    /** Ausente en guardados viejos (piso sin mercado todavía) — Dungeon.recomputeStairsFromGrid() no depende de esto. */
-    npcs?: NpcInstance[];
-  };
+  dungeon: DungeonSaveData;
   stats: {
     turn: number;
     enemiesKilled: number;
@@ -165,6 +171,15 @@ export interface GameSaveData {
   };
   /** Precios de los NPCs del mercado — ausente en guardados viejos, se inicializa fresco. */
   market?: MarketSaveData;
+  /**
+   * Snapshot de cada piso ya visitado y abandonado (nunca el activo, que
+   * está en `dungeon`) — al volver a subir/bajar a uno de estos, se
+   * restaura tal cual quedó (enemigos con su vida actual, items ya
+   * recogidos) en vez de generar uno nuevo. Ausente en guardados viejos —
+   * sin esto, simplemente no hay pisos cacheados todavía. Ver skill
+   * npc-trading.
+   */
+  floors?: Record<number, DungeonSaveData>;
 }
 
 // --- Save slots (menu de Nueva partida / Continuar) ---

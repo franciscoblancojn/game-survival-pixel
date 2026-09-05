@@ -6,6 +6,21 @@ import { createItemInstance } from '../systems/ItemSystem.js';
 import { createNpcInstances } from '../systems/NpcSystem.js';
 import type { TileType, EnemyInstance, ItemInstance, NpcInstance, Difficulty } from '../../types.js';
 
+/**
+ * Todo lo que hace falta para volver a pararse en un piso exactamente como
+ * quedó — vivo en memoria (rooms son instancias reales de `Room`, no la
+ * forma serializable `RoomData`). Ver `Dungeon.floorCache`/`goToFloor` y la
+ * skill npc-trading.
+ */
+export interface FloorState {
+  floor: number;
+  grid: TileType[][];
+  rooms: Room[];
+  enemies: EnemyInstance[];
+  items: ItemInstance[];
+  npcs: NpcInstance[];
+}
+
 export class Dungeon {
   public width: number;
   public height: number;
@@ -20,6 +35,14 @@ export class Dungeon {
   public stairsUpPos: { x: number; y: number } | null;
   /** Posición de la escalera de bajada de este piso. */
   public stairsDownPos: { x: number; y: number } | null;
+  /**
+   * Pisos ya visitados y abandonados, tal cual quedaron — `goToFloor` los
+   * restaura en vez de generar uno nuevo. Nunca incluye el piso activo
+   * (`this.floor`), que vive en los campos de arriba. Pública para que
+   * `Game.saveGame`/`loadFromSlot` puedan serializarla/reconstruirla. Ver
+   * skill npc-trading.
+   */
+  public floorCache: Map<number, FloorState>;
 
   constructor() {
     this.width = MAP_WIDTH;
@@ -33,6 +56,7 @@ export class Dungeon {
     this.floor = 1;
     this.stairsUpPos = null;
     this.stairsDownPos = null;
+    this.floorCache = new Map();
     this.initGrid();
   }
 
@@ -88,6 +112,53 @@ export class Dungeon {
         else if (this.grid[y][x] === TILE.STAIRS_DOWN) this.stairsDownPos = { x, y };
       }
     }
+  }
+
+  private captureFloorState(): FloorState {
+    return {
+      floor: this.floor,
+      grid: this.grid,
+      rooms: this.rooms,
+      enemies: this.enemies,
+      items: this.items,
+      npcs: this.npcs,
+    };
+  }
+
+  private applyFloorState(state: FloorState): void {
+    this.floor = state.floor;
+    this.grid = state.grid;
+    this.rooms = state.rooms;
+    this.enemies = state.enemies;
+    this.items = state.items;
+    this.npcs = state.npcs;
+    this.recomputeStairsFromGrid();
+  }
+
+  /**
+   * Cambia al piso `floor` — si ya se había visitado y abandonado antes, lo
+   * restaura EXACTAMENTE como quedó (enemigos con su vida actual, items ya
+   * recogidos del suelo, muros iguales) en vez de generar uno nuevo. Antes
+   * subir y volver a bajar (o viceversa) regeneraba el piso cada vez, así
+   * que "el mismo piso" en realidad era uno distinto cada visita.
+   *
+   * El piso que se abandona se guarda en `floorCache` ANTES de decidir qué
+   * hacer con el destino — así, aunque el destino sea nuevo (primera
+   * visita), el piso de origen queda cacheado para la próxima vez que se
+   * vuelva a él.
+   */
+  goToFloor(floor: number, difficulty: Difficulty = DEFAULT_DIFFICULTY): void {
+    this.floorCache.set(this.floor, this.captureFloorState());
+
+    const cached = this.floorCache.get(floor);
+    if (cached) {
+      this.floorCache.delete(floor);
+      this.applyFloorState(cached);
+      return;
+    }
+
+    if (floor === 0) this.generateMarket();
+    else this.generateLevel(floor, difficulty);
   }
 
   removeEnemy(enemy: EnemyInstance): void {

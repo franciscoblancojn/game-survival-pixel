@@ -1,5 +1,5 @@
 import { TILE } from '../../constants.js';
-import type { DoorData, TileType } from '../../types.js';
+import type { DoorData, RoomData, TileType } from '../../types.js';
 
 export class Room {
   public x: number;
@@ -24,6 +24,27 @@ export class Room {
     this.items = [];
     this.explored = false;
     this.workStations = [];
+  }
+
+  /** Forma serializable de esta sala (guardado de ranura y caché de pisos, ver skill npc-trading). */
+  toData(): RoomData {
+    return {
+      x: this.x, y: this.y, width: this.width, height: this.height,
+      type: this.type, doors: this.doors, explored: this.explored,
+    };
+  }
+
+  /**
+   * Reconstruye una sala real (con `centerX`/`centerY`/`contains`/
+   * `getRandomFloorPosition` reales, no sintéticos) a partir de su forma
+   * serializada — usado al cargar una ranura de guardado, tanto para el
+   * piso activo como para cada piso cacheado.
+   */
+  static fromData(data: RoomData): Room {
+    const room = new Room(data.x, data.y, data.width, data.height, data.type);
+    room.doors = data.doors;
+    room.explored = data.explored;
+    return room;
   }
 
   get centerX(): number {

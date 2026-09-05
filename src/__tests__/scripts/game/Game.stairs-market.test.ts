@@ -62,7 +62,8 @@ describe("Escaleras + mercado — integración de punta a punta", () => {
     expect(game.player.y).toBe(game.dungeon.stairsUpPos!.y);
   });
 
-  it("subir las escaleras desde el piso 2 regresa a un piso 1 (nuevo)", () => {
+  it("subir las escaleras desde el piso 2 vuelve al piso 1 de antes (restaurado, no regenerado)", () => {
+    const grid1 = game.dungeon.grid;
     stepOnto(game, game.dungeon.stairsDownPos!); // 1 -> 2
     game.dungeon.enemies = [];
     game.dungeon.items = [];
@@ -75,6 +76,8 @@ describe("Escaleras + mercado — integración de punta a punta", () => {
     expect(game.dungeon.floor).toBe(1);
     expect(game.player.x).toBe(game.dungeon.stairsDownPos!.x);
     expect(game.player.y).toBe(game.dungeon.stairsDownPos!.y);
+    // Es literalmente el mismo grid de antes de bajar, no uno regenerado.
+    expect(game.dungeon.grid).toBe(grid1);
   });
 
   it("subir desde el piso 1 lleva al mercado (piso 0), no a un piso 0 procedural", () => {
@@ -109,7 +112,8 @@ describe("Escaleras + mercado — integración de punta a punta", () => {
     expect(game.marketUI.visible).toBe(false);
   });
 
-  it("bajar desde el mercado regresa a un piso 1 (nuevo)", () => {
+  it("bajar desde el mercado vuelve al piso 1 de antes (restaurado, no regenerado)", () => {
+    const grid1 = game.dungeon.grid;
     stepOnto(game, game.dungeon.stairsUpPos!); // 1 -> mercado
 
     const down0 = game.dungeon.stairsDownPos!;
@@ -118,5 +122,76 @@ describe("Escaleras + mercado — integración de punta a punta", () => {
     game.turnSystem.executePlayerAction({ type: "move", dx: 1, dy: 0 });
 
     expect(game.dungeon.floor).toBe(1);
+    expect(game.dungeon.grid).toBe(grid1);
+  });
+});
+
+describe("Dungeon.floorCache — el piso que se abandona vuelve exactamente como quedó", () => {
+  let game: Game;
+
+  beforeEach(() => {
+    game = new Game(makeFakeCanvas());
+    game.mainMenu = { close: () => undefined, open: () => undefined } as unknown as Game["mainMenu"];
+    game.startNewGame(1);
+  });
+
+  it("un enemigo matado en el piso 1 sigue muerto al volver, tras bajar y subir", () => {
+    game.dungeon.items = [];
+    const survivor = { id: "e_survivor", type: "rat", name: "Rata", x: 2, y: 2, hp: 10, maxHp: 10, attack: 1, defense: 0, xp: 1, aggroRange: 1, color: "#fff", darkColor: "#000", speed: 1, turnsUntilMove: 0 };
+    game.dungeon.enemies = [survivor];
+
+    // "Matar" al enemigo antes de dejar el piso — mismo efecto que
+    // TurnSystem.playerAttack cuando hp llega a 0.
+    game.dungeon.removeEnemy(survivor);
+    expect(game.dungeon.enemies).toHaveLength(0);
+
+    stepOnto(game, game.dungeon.stairsDownPos!); // 1 -> 2
+    game.dungeon.enemies = [];
+    game.dungeon.items = [];
+    stepOnto(game, game.dungeon.stairsUpPos!); // 2 -> 1 (restaurado)
+
+    expect(game.dungeon.floor).toBe(1);
+    expect(game.dungeon.enemies).toHaveLength(0);
+  });
+
+  it("un item recogido en el piso 1 no reaparece al volver, tras subir al mercado y bajar", () => {
+    game.dungeon.enemies = [];
+    const picked = { id: "i_picked", type: "wood", name: "Madera", x: 2, y: 2, quantity: 1, stackable: true, icon: "🪵", color: "#8b4513" };
+    game.dungeon.items = [picked];
+
+    game.dungeon.removeItem(picked);
+    expect(game.dungeon.items).toHaveLength(0);
+
+    stepOnto(game, game.dungeon.stairsUpPos!); // 1 -> mercado
+    stepOnto(game, game.dungeon.stairsDownPos!); // mercado -> 1 (restaurado)
+
+    expect(game.dungeon.floor).toBe(1);
+    expect(game.dungeon.items).toHaveLength(0);
+  });
+
+  it("guardar y cargar la ranura conserva el piso cacheado (no solo el activo)", () => {
+    game.currentSlot = 1;
+    game.dungeon.enemies = [];
+    game.dungeon.items = [];
+    const roomCountFloor1 = game.dungeon.rooms.length;
+
+    stepOnto(game, game.dungeon.stairsDownPos!); // 1 -> 2 (cachea el piso 1)
+    expect(game.dungeon.floorCache.has(1)).toBe(true);
+
+    game.saveGame();
+
+    const reloaded = new Game(makeFakeCanvas());
+    reloaded.mainMenu = { close: () => undefined, open: () => undefined } as unknown as Game["mainMenu"];
+    expect(reloaded.continueGame(1)).toBe(true);
+
+    expect(reloaded.dungeon.floorCache.has(1)).toBe(true);
+    expect(reloaded.dungeon.floorCache.get(1)!.rooms).toHaveLength(roomCountFloor1);
+
+    reloaded.dungeon.enemies = [];
+    reloaded.dungeon.items = [];
+    stepOnto(reloaded, reloaded.dungeon.stairsUpPos!); // 2 -> 1 (restaurado desde el guardado)
+
+    expect(reloaded.dungeon.floor).toBe(1);
+    expect(reloaded.dungeon.rooms).toHaveLength(roomCountFloor1);
   });
 });

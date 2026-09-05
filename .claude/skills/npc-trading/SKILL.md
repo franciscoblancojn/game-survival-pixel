@@ -12,7 +12,7 @@ description: Usar al tocar las escaleras de subida/bajada entre pisos, el mercad
 | `src/assets/npc/npc_base.ts` | Clase `NpcBase` — de la que heredan **todos** los NPCs. `descripcion`, `dialogos` (saludo/compra/venta/sinDinero/despedida), `inventario` (items que tradea + `precioBase`). |
 | `src/assets/npc/<tipo>.ts` | Un archivo por NPC (`herrero.ts`, `alquimista.ts`, `buhonero.ts`), clase que `extends NpcBase`. |
 | `src/assets/npc/index.ts` | `NPC_DEFINITIONS: Record<string, NpcBase>` — registro central, única fuente de NPCs. |
-| `src/scripts/game/world/Dungeon.ts` | `stairsUpPos`/`stairsDownPos` (posición de cada escalera del piso actual), `npcs: NpcInstance[]`, `getNpcAt()`, `generateMarket()` (piso 0, fijo, no procedural), `recomputeStairsFromGrid()` (recalcula las dos posiciones recorriendo el grid, usado al cargar una ranura). |
+| `src/scripts/game/world/Dungeon.ts` | `stairsUpPos`/`stairsDownPos` (posición de cada escalera del piso actual), `npcs: NpcInstance[]`, `getNpcAt()`, `generateMarket()` (piso 0, fijo, no procedural), `recomputeStairsFromGrid()` (recalcula las dos posiciones recorriendo el grid), `floorCache`/`goToFloor()` (cachea el piso que se abandona y restaura el de destino si ya se había visitado — ver más abajo). |
 | `src/scripts/game/systems/NpcSystem.ts` | `createNpcInstances(room)` — coloca una instancia de CADA NPC de `NPC_DEFINITIONS` en fila dentro de la sala del mercado (a diferencia de enemigos/items, no elige al azar: siempre están todos). |
 | `src/scripts/game/Market.ts` | Clase `Market` — el "valor actual" de cada relación NPC↔item, persistente durante la partida. `getPrice`, `tradesItem`, `registerBuy`/`registerSell` (mueven el precio), `toJSON`/`fromJSON`. |
 | `src/scripts/game/systems/TradeSystem.ts` | `buyItem(game, npcType, itemType)` / `sellItem(...)` — la transacción completa (gold, inventario, mover el precio). Devuelven `{ ok, reason, message }`. |
@@ -26,23 +26,28 @@ Antes solo existía `TILE.STAIRS_DOWN`, colocada en el centro de la última sala
 
 - `Dungeon.generateLevel()` coloca `TILE.STAIRS_UP` en el centro de la sala inicial (`stairsUpPos`) y `TILE.STAIRS_DOWN` en el centro de la última sala (`stairsDownPos`) — la sala inicial es exactamente donde ya aparecía el jugador, así que la escalera de subida no desplaza nada existente.
 - `TurnSystem` dispara `Game.goDownStairs()`/`goUpStairs()` al pisar cada una — antes de esto el mensaje de pisar la escalera no hacía nada.
-- Al llegar a un piso **desde arriba** (bajando), el jugador aparece en su `stairsUpPos` (la escalera que lo llevaría de vuelta). Al llegar **desde abajo** (subiendo), aparece en su `stairsDownPos`. Así cada viaje dej al jugador parado justo sobre la escalera que lo regresaría por donde vino.
-- **No hay backtracking persistente**: subir o bajar siempre **regenera** el piso de destino con `generateLevel()` (piso nuevo, no el que se había dejado antes) — mismo criterio que Pixel Dungeon. La única excepción es el mercado (ver abajo), que si persiste entre visitas.
+- Al llegar a un piso **desde arriba** (bajando), el jugador aparece en su `stairsUpPos` (la escalera que lo llevaría de vuelta). Al llegar **desde abajo** (subiendo), aparece en su `stairsDownPos`. Así cada viaje deja al jugador parado justo sobre la escalera que lo regresaría por donde vino.
 
-## El mercado (piso 0) — fijo, no procedural, persistente
+## `Dungeon.goToFloor()` — el piso vuelve exactamente como quedó
 
-Subir desde el piso 1 no lleva a un "piso 0" procedural — lleva a `Dungeon.generateMarket()`, un piso **fijo** (una sola sala, sin pasillos, sin enemigos) con los 3 NPCs de `NPC_DEFINITIONS` en fila y una única escalera de bajada (`stairsDownPos`) que devuelve al piso 1 (recién generado, como cualquier otra transición). No tiene `stairsUpPos` (es la cima — no hay nada más arriba).
+Bajar y volver a subir (o al revés) **restaura el mismo piso**, no genera uno nuevo — antes sí lo hacía, y era un bug real: el usuario bajaba un piso y al subir se encontraba con uno distinto, cuando debía ser el mismo de antes (mismos muros, los enemigos que ya había matado seguían muertos, los items que ya había recogido no reaparecían).
 
-`Game.goUpStairs()` decide entre las dos ramas mirando `dungeon.floor <= 1`:
+`Dungeon.floorCache: Map<number, FloorState>` guarda cada piso abandonado tal cual quedó — `FloorState` son los datos *vivos* (`rooms: Room[]`, no `RoomData[]`), no una copia. `goToFloor(floor, difficulty)` es el único punto de entrada para cambiar de piso:
+
 ```ts
-if (this.dungeon.floor <= 1) {
-  this.dungeon.generateMarket();      // piso 0
-} else {
-  this.dungeon.generateLevel(this.dungeon.floor - 1, this.difficulty);
+goToFloor(floor: number, difficulty: Difficulty = DEFAULT_DIFFICULTY): void {
+  this.floorCache.set(this.floor, this.captureFloorState()); // cachea el que se abandona
+  const cached = this.floorCache.get(floor);
+  if (cached) { this.applyFloorState(cached); return; }        // ya visitado: se restaura
+  if (floor === 0) this.generateMarket(); else this.generateLevel(floor, difficulty); // primera vez: se genera
 }
 ```
 
-A diferencia de los pisos de la mazmorra, **el mercado no se regenera en cada visita** — los NPCs y sobre todo sus precios (`Game.market`) persisten durante toda la partida. Si tocás `generateMarket()`, no le agregues aleatoriedad a la disposición de NPCs asumiendo que "total, se regenera" — no es así.
+`Game.goDownStairs()`/`goUpStairs()` llaman a esto (nunca a `generateLevel`/`generateMarket` directo) — **no vuelvas a llamarlos directo desde ahí**, se te salta el cacheo y se reintroduce el bug. El piso 0 (mercado) entra por el mismo mecanismo: `goToFloor(0, ...)` es lo que dispara `generateMarket()` la primera vez.
+
+## El mercado (piso 0) — fijo, no procedural
+
+Subir desde el piso 1 no lleva a un "piso 0" procedural — lleva a `Dungeon.generateMarket()` (disparado por `goToFloor` cuando el destino es 0), un piso **fijo** (una sola sala, sin pasillos, sin enemigos) con los 3 NPCs de `NPC_DEFINITIONS` en fila y una única escalera de bajada (`stairsDownPos`). No tiene `stairsUpPos` (es la cima — no hay nada más arriba). Como cualquier otro piso, una vez abandonado queda en `floorCache` — la segunda vez que se sube desde el piso 1, se restaura el mismo mercado (con los NPCs donde estaban) en vez de volver a llamar `generateMarket()`. `generateMarket()` no necesita ninguna lógica de "no regenerar en cada visita" propia — eso ya lo resuelve `goToFloor()` para todos los pisos por igual.
 
 ## `Market` — el "valor actual" sube al comprar, baja al vender
 
@@ -59,6 +64,10 @@ market.registerSell(npcType, itemType) // el jugador vendió: precio baja (más 
 - **Solo se puede vender lo que el NPC tradea** (`tradesItem`) — no se le puede vender una poción al herrero aunque el jugador la tenga. Y solo se vende lo que está en `player.inventory` (no lo equipado) — `Player.hasItem`/`removeItem` ya funcionan así, no hace falta lógica extra de desequipar.
 - Persiste en el guardado (`GameSaveData.market`, campo opcional — ausente en guardados viejos, `Market.fromJSON(undefined)` deja los precios en sus `precioBase` por defecto, mismo criterio que `player.gold` cuando se agregó).
 
+## Persistencia de `floorCache` en el guardado
+
+`GameSaveData.floors?: Record<number, DungeonSaveData>` (campo opcional, ausente en guardados viejos = sin pisos cacheados todavía, no rompe la carga) guarda cada entrada de `dungeon.floorCache` — el piso activo sigue yendo en `GameSaveData.dungeon` como siempre, `floors` es el resto. `Game.saveGame()`/`loadFromSlot()` convierten entre la forma viva (`FloorState`, `rooms: Room[]`) y la serializable (`DungeonSaveData`, `rooms: RoomData[]`) con `Room.toData()`/`Room.fromData()` — dos helpers estáticos en `Room.ts`, usados tanto para el piso activo como para cada piso cacheado, no dupliques esa conversión a mano en otro lado.
+
 ## Diálogos (`NpcBase.dialogos`)
 
 Cinco listas por NPC — `saludo` (al abrir el comercio), `compra`/`venta` (tras una operación exitosa), `sinDinero` (compra fallida por oro insuficiente), `despedida` (al cerrar el overlay). `NpcBase.randomLine(situacion)` elige una línea al azar de la lista pedida. `MarketUI` decide qué lista mostrar según el `reason` que devuelve `TradeSystem.buyItem`/`sellItem` (`'ok'` → compra/venta, `'no_gold'` → sinDinero) — no matchea el string del mensaje, usa el reason code.
@@ -74,5 +83,6 @@ Cinco listas por NPC — `saludo` (al abrir el comercio), `compra`/`venta` (tras
 - `src/__tests__/assets/npc/NpcBase.test.ts` — stats de `NpcBase`, que cada `precioBase` de `NPC_DEFINITIONS` caiga dentro de la banda de su item, que la clave del registro coincida con `type`.
 - `src/__tests__/scripts/game/Market.test.ts` — `registerBuy`/`registerSell` mueven el precio en la dirección correcta y lo clampean a `[valorMinimo, valorMaximo]`; `tradesItem` respeta el `inventario` del NPC; `toJSON`/`fromJSON` sobreviven un guardado/carga.
 - `src/__tests__/scripts/game/world/Dungeon.test.ts` — cada piso generado tiene `stairsUpPos` y `stairsDownPos` (o solo uno de los dos, si es el mercado), y son alcanzables.
+- `src/__tests__/scripts/game/Game.stairs-market.test.ts` — integración de punta a punta con un `Game` real (canvas/ctx falsos): caminar sobre cada escalera dispara la transición correcta, hablar con un NPC no gasta turno, y — el bug que motivó `floorCache` — un piso abandonado vuelve exactamente igual (mismo `grid`, enemigos muertos siguen muertos, items recogidos no reaparecen), incluso tras un guardado/carga de ranura real.
 
-Si agregás un NPC o tocás la fórmula de precios, corré `bun run test`.
+Si agregás un NPC, tocás la fórmula de precios, o tocás `goToFloor`/`floorCache`, corré `bun run test`.
