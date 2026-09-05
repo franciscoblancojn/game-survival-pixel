@@ -175,8 +175,11 @@ export interface Recipe {
 export type RecipeStation = 'workbench' | 'furnace' | 'anvil' | 'alchemy';
 
 // --- Player action ---
+// No hay 'pickup' manual: recoger es automático al pisar la celda del item
+// (ver TurnSystem.executePlayerAction, caso 'move') — se quitó el botón/
+// tecla de recoger porque quedaba redundante con eso.
 export interface PlayerAction {
-  type: 'move' | 'attack' | 'pickup' | 'wait';
+  type: 'move' | 'attack' | 'wait';
   dx?: number;
   dy?: number;
   x?: number;

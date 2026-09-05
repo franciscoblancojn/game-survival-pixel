@@ -57,15 +57,6 @@ export class TurnSystem {
         break;
       }
 
-      case 'pickup': {
-        const item = dungeon.getItemAt(player.x, player.y);
-        if (item) {
-          this.playerPickup(item);
-          actionTaken = true;
-        }
-        break;
-      }
-
       case 'wait': {
         actionTaken = true;
         break;

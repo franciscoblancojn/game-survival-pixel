@@ -43,13 +43,6 @@ import PauseMenu from '../components/PauseMenu/index.astro';
       document.getElementById('btn-minimap')?.addEventListener('click', () => {
         window.gameInstance?.toggleMiniMap();
       });
-      document.getElementById('btn-pickup')?.addEventListener('click', () => {
-        if (window.gameInstance) {
-          const ts = window.gameInstance.turnSystem;
-          ts.executePlayerAction({ type: 'pickup' });
-          window.gameInstance.render();
-        }
-      });
       document.getElementById('btn-menu')?.addEventListener('click', () => {
         window.gameInstance?.togglePauseMenu();
       });

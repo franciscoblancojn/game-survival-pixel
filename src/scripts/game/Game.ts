@@ -189,7 +189,15 @@ export class Game {
   }
 
   toggleMiniMap(): void {
-    this.miniMap.toggle();
+    if (this.miniMap.visible) {
+      this.miniMap.toggle();
+    } else {
+      // Cierra mochila/crafteo si estaban abiertas — con la barra inferior
+      // visible por encima de todos los overlays, tocar "Mapa" debe
+      // cambiar directo sin dejar el panel anterior abierto detrás.
+      this.closeAllOverlays();
+      this.miniMap.toggle();
+    }
   }
 
   /** Botón ⏸️ de la barra inferior: abre/cierra el menú de pausa (Continuar / Salir). */
@@ -197,7 +205,10 @@ export class Game {
     if (this.state === 'paused') {
       this.state = 'exploring';
       this.pauseMenu.close();
-    } else if (this.state === 'exploring') {
+    } else if (this.state === 'exploring' || this.state === 'inventory' || this.state === 'crafting') {
+      // Con la barra inferior visible por encima de mochila/crafteo/mapa,
+      // "Menú" debe funcionar sin importar cuál de esos esté abierto — no
+      // solo cuando ya se estaba explorando.
       this.closeAllOverlays();
       this.state = 'paused';
       this.pauseMenu.open();
@@ -232,6 +243,9 @@ export class Game {
       this.craftingUI.visible = false;
       document.getElementById('crafting-overlay')!.style.display = 'none';
     }
+    if (this.miniMap.visible) {
+      this.miniMap.toggle();
+    }
   }
 
   // === INVENTORY ACTIONS ===
@@ -244,6 +258,9 @@ export class Game {
       this.player.equipItem(item);
       this.addMessage(`Equipaste ${item.name}`);
       this.inventoryUI.render();
+      // Ataque/defensa cambian al equipar — el HUD (mochila abierta o no)
+      // debe reflejarlo ya, no recién en el próximo turno.
+      this.hud.render(this.player, this.dungeon.floor);
     }
   }
 
@@ -255,6 +272,9 @@ export class Game {
     if (msg) {
       this.addMessage(msg);
       this.inventoryUI.render();
+      // Una poción/comida cambia hp/hunger — actualizar el HUD de inmediato
+      // (antes solo se refrescaba en el siguiente turno de juego).
+      this.hud.render(this.player, this.dungeon.floor);
     }
   }
 

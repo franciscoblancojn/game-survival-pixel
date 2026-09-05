@@ -13,6 +13,24 @@ export class Hub {
 
   constructor() {
     this.messageLog = [];
+    this.observeHeight();
+  }
+
+  /**
+   * Mantiene la variable CSS --hud-height sincronizada con la altura real
+   * del HUD (varía con la cantidad de mensajes visibles). La usan los
+   * overlays de inventario/crafteo/mapa para dejar espacio arriba y no
+   * taparlo — ver main.css y skill del sistema de estado del jugador.
+   */
+  private observeHeight(): void {
+    const el = document.getElementById('hud');
+    if (!el || typeof ResizeObserver === 'undefined') return;
+
+    const sync = () => {
+      document.documentElement.style.setProperty('--hud-height', `${el.offsetHeight}px`);
+    };
+    sync();
+    new ResizeObserver(sync).observe(el);
   }
 
   /**
@@ -59,8 +77,12 @@ export class Hub {
     const floorEl = document.getElementById('hub-floor');
     if (floorEl) floorEl.textContent = `📍 Piso ${floor}`;
 
-    // Mensajes
-    this.renderMessages();
+    // El log de mensajes NO se re-renderiza acá — antes se llamaba
+    // renderMessages() en cada syncPlayerState (o sea, en cada turno,
+    // aunque no hubiera mensaje nuevo), lo que reescribía el innerHTML del
+    // log entero y reiniciaba la animación msgFadeIn en mensajes que ya
+    // estaban en pantalla — parpadeo en cada movimiento. addMessage() ya
+    // llama renderMessages() cuando de verdad hay algo nuevo que mostrar.
   }
 
   addMessage(text: string): void {

@@ -159,10 +159,6 @@ export class Input {
           this.game.turnSystem.executePlayerAction({ type: 'wait' });
           this.game.render();
           return;
-        case 'g': case 'G':
-          this.game.turnSystem.executePlayerAction({ type: 'pickup' });
-          this.game.render();
-          return;
         case 'i': case 'I': this.game.toggleInventory(); return;
         case 'c': case 'C': this.game.toggleCrafting();  return;
         case 'm': case 'M': this.game.toggleMiniMap();   return;
