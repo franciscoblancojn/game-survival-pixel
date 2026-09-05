@@ -1,5 +1,5 @@
 import { TILE, COLORS, CELL_SIZE } from '../constants.js';
-import type { TileType, EnemyInstance, ItemInstance, Particle } from '../types.js';
+import type { TileType, EnemyInstance, ItemInstance, NpcInstance, Particle } from '../types.js';
 import type { Player } from './entities/Player.js';
 import type { Dungeon } from './world/Dungeon.js';
 
@@ -97,6 +97,14 @@ export class Renderer {
       const sy = enemy.y - this.cameraY;
       if (sx >= -1 && sx <= this.visibleCols && sy >= -1 && sy <= this.visibleRows) {
         this.drawEnemy(ctx, sx, sy, enemy);
+      }
+    }
+
+    for (const npc of this.dungeon.npcs) {
+      const sx = npc.x - this.cameraX;
+      const sy = npc.y - this.cameraY;
+      if (sx >= -1 && sx <= this.visibleCols && sy >= -1 && sy <= this.visibleRows) {
+        this.drawNpc(ctx, sx, sy, npc);
       }
     }
 
@@ -264,6 +272,28 @@ export class Renderer {
       ctx.fillStyle = hpPct > 0.5 ? '#4caf50' : hpPct > 0.25 ? '#ffa500' : '#ff0000';
       ctx.fillRect(x + pad, barY, barW * hpPct, barH);
     }
+  }
+
+  /** NPC del mercado — un cuerpo redondeado de su color propio, sin barra de vida (no pelean). */
+  private drawNpc(
+    ctx: CanvasRenderingContext2D,
+    sx: number, sy: number,
+    npc: NpcInstance
+  ): void {
+    const x = sx * CELL_SIZE;
+    const y = sy * CELL_SIZE;
+    const pad = 4;
+    const size = CELL_SIZE - pad * 2;
+
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.fillRect(x + pad + 2, y + pad + size - 2, size - 4, 3);
+
+    ctx.fillStyle = npc.color;
+    ctx.fillRect(x + pad, y + pad, size, size);
+
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    ctx.fillRect(x + pad + 6, y + pad + 7, 3, 3);
+    ctx.fillRect(x + pad + size - 9, y + pad + 7, 3, 3);
   }
 
   private drawItem(

@@ -100,6 +100,25 @@ export interface DoorData {
   connected: boolean;
 }
 
+// --- NPC ---
+// (la definición estática de cada tipo de NPC vive como clase en
+// src/assets/npc/, no como interfaz plana acá — ver NpcBaseStats ahí)
+
+export interface NpcInstance {
+  id: string;
+  type: string;
+  name: string;
+  x: number;
+  y: number;
+  color: string;
+}
+
+// --- Mercado (comercio con NPCs, ver src/scripts/game/Market.ts) ---
+export interface MarketSaveData {
+  /** precios[npcType][itemType] = "valor actual" de esa relación de tradeo. */
+  precios: Record<string, Record<string, number>>;
+}
+
 // --- Equipment ---
 export interface Equipment {
   weapon: ItemInstance | null;
@@ -136,12 +155,16 @@ export interface GameSaveData {
     rooms: RoomData[];
     enemies: EnemyInstance[];
     items: ItemInstance[];
+    /** Ausente en guardados viejos (piso sin mercado todavía) — Dungeon.recomputeStairsFromGrid() no depende de esto. */
+    npcs?: NpcInstance[];
   };
   stats: {
     turn: number;
     enemiesKilled: number;
     deepestFloor: number;
   };
+  /** Precios de los NPCs del mercado — ausente en guardados viejos, se inicializa fresco. */
+  market?: MarketSaveData;
 }
 
 // --- Save slots (menu de Nueva partida / Continuar) ---
@@ -185,7 +208,7 @@ export interface EnemyTurnResult {
 }
 
 // --- Game state ---
-export type GameState = 'menu' | 'exploring' | 'inventory' | 'crafting' | 'dead' | 'paused';
+export type GameState = 'menu' | 'exploring' | 'inventory' | 'crafting' | 'trading' | 'dead' | 'paused';
 
 // --- Particle ---
 export interface Particle {

@@ -4,14 +4,16 @@ import { Player } from './entities/Player.js';
 import { Renderer } from './Renderer.js';
 import { Input } from './Input.js';
 import { TurnSystem } from './systems/TurnSystem.js';
+import { Market } from './Market.js';
 import { HUD } from '../components/HUD.js';
 import { MiniMap } from '../components/MiniMap.js';
 import { InventoryUI } from '../components/Inventory.js';
 import { CraftingUI } from '../components/CraftingUI.js';
+import { MarketUI } from '../components/MarketUI.js';
 import { MainMenu } from '../components/MainMenu.js';
 import { PauseMenu } from '../components/PauseMenu.js';
 import { loadSlot, saveSlot, deleteSlot, migrateLegacySave } from './SaveSlots.js';
-import type { GameState, GameSaveData, Difficulty } from '../types.js';
+import type { GameState, GameSaveData, Difficulty, NpcInstance } from '../types.js';
 
 export class Game {
   public canvas: HTMLCanvasElement;
@@ -24,6 +26,7 @@ export class Game {
 
   public dungeon: Dungeon;
   public player: Player;
+  public market: Market;
   public renderer!: Renderer;
   public input!: Input;
   public turnSystem!: TurnSystem;
@@ -31,6 +34,7 @@ export class Game {
   public miniMap!: MiniMap;
   public inventoryUI!: InventoryUI;
   public craftingUI!: CraftingUI;
+  public marketUI!: MarketUI;
   public mainMenu!: MainMenu;
   public pauseMenu!: PauseMenu;
 
@@ -50,6 +54,7 @@ export class Game {
 
     this.dungeon = new Dungeon();
     this.player = null!;
+    this.market = new Market();
   }
 
   /**
@@ -88,6 +93,7 @@ export class Game {
     this.miniMap = new MiniMap(this);
     this.inventoryUI = new InventoryUI(this);
     this.craftingUI = new CraftingUI(this);
+    this.marketUI = new MarketUI(this);
     this.pauseMenu = new PauseMenu(this);
   }
 
@@ -110,6 +116,7 @@ export class Game {
     this.turn = 0;
     this.enemiesKilled = 0;
     this.deepestFloor = 1;
+    this.market = new Market();
 
     this.dungeon = new Dungeon();
     this.dungeon.generateLevel(1, this.difficulty);
@@ -188,6 +195,18 @@ export class Game {
     }
   }
 
+  /** Abre el overlay de comercio con `npc` — disparado al caminar hacia un NPC (TurnSystem), no desde la barra inferior. */
+  openTrade(npc: NpcInstance): void {
+    this.closeAllOverlays();
+    this.state = 'trading';
+    this.marketUI.open(npc);
+  }
+
+  closeTrade(): void {
+    this.state = 'exploring';
+    this.marketUI.close();
+  }
+
   toggleMiniMap(): void {
     if (this.miniMap.visible) {
       this.miniMap.toggle();
@@ -205,10 +224,10 @@ export class Game {
     if (this.state === 'paused') {
       this.state = 'exploring';
       this.pauseMenu.close();
-    } else if (this.state === 'exploring' || this.state === 'inventory' || this.state === 'crafting') {
-      // Con la barra inferior visible por encima de mochila/crafteo/mapa,
-      // "Menú" debe funcionar sin importar cuál de esos esté abierto — no
-      // solo cuando ya se estaba explorando.
+    } else if (this.state === 'exploring' || this.state === 'inventory' || this.state === 'crafting' || this.state === 'trading') {
+      // Con la barra inferior visible por encima de mochila/crafteo/mercado/
+      // mapa, "Menú" debe funcionar sin importar cuál de esos esté abierto —
+      // no solo cuando ya se estaba explorando.
       this.closeAllOverlays();
       this.state = 'paused';
       this.pauseMenu.open();
@@ -227,6 +246,8 @@ export class Game {
       this.toggleInventory();
     } else if (this.state === 'crafting') {
       this.toggleCrafting();
+    } else if (this.state === 'trading') {
+      this.closeTrade();
     } else if (this.state === 'paused') {
       this.togglePauseMenu();
     } else if (this.miniMap.visible) {
@@ -242,6 +263,9 @@ export class Game {
     if (this.craftingUI.visible) {
       this.craftingUI.visible = false;
       document.getElementById('crafting-overlay')!.style.display = 'none';
+    }
+    if (this.marketUI.visible) {
+      this.marketUI.close();
     }
     if (this.miniMap.visible) {
       this.miniMap.toggle();
@@ -326,17 +350,49 @@ export class Game {
   }
 
   // === STAIRS ===
+  // Cada piso tiene dos escaleras (Dungeon.stairsUpPos/stairsDownPos): una
+  // de entrada (sube) y una de salida (baja) — ver skill npc-trading. Al
+  // llegar a un piso desde abajo se aparece en su escalera de bajada
+  // (stairsDownPos); al llegar desde arriba, en la de subida
+  // (stairsUpPos) — así cada viaje deja al jugador parado justo sobre la
+  // escalera que lo llevaría de vuelta por donde vino.
 
+  /** Baja un piso (o del mercado al piso 1). Aparece en la escalera de subida del piso nuevo. */
   goDownStairs(): void {
-    this.addMessage('Bajas al siguiente piso...');
+    this.addMessage('Bajas las escaleras...');
     const newFloor = this.dungeon.floor + 1;
     this.deepestFloor = Math.max(this.deepestFloor, newFloor);
 
     this.dungeon.generateLevel(newFloor, this.difficulty);
 
     const startRoom = this.dungeon.rooms[0];
-    this.player.x = startRoom.centerX;
-    this.player.y = startRoom.centerY;
+    const landing = this.dungeon.stairsUpPos ?? { x: startRoom.centerX, y: startRoom.centerY };
+    this.player.x = landing.x;
+    this.player.y = landing.y;
+
+    this.renderer.dungeon = this.dungeon;
+    this.render();
+    this.saveGame();
+  }
+
+  /**
+   * Sube un piso. Desde el piso 1 no hay piso 0 procedural — lleva al
+   * mercado (Dungeon.generateMarket()), un piso fijo con los NPCs para
+   * comerciar. Aparece en la escalera de bajada del piso nuevo.
+   */
+  goUpStairs(): void {
+    if (this.dungeon.floor <= 1) {
+      this.addMessage('Subes hacia la superficie...');
+      this.dungeon.generateMarket();
+    } else {
+      this.addMessage('Subes las escaleras...');
+      this.dungeon.generateLevel(this.dungeon.floor - 1, this.difficulty);
+    }
+
+    const firstRoom = this.dungeon.rooms[0];
+    const landing = this.dungeon.stairsDownPos ?? { x: firstRoom.centerX, y: firstRoom.centerY };
+    this.player.x = landing.x;
+    this.player.y = landing.y;
 
     this.renderer.dungeon = this.dungeon;
     this.render();
@@ -365,12 +421,14 @@ export class Game {
           })),
           enemies: this.dungeon.enemies,
           items: this.dungeon.items,
+          npcs: this.dungeon.npcs,
         },
         stats: {
           turn: this.turn,
           enemiesKilled: this.enemiesKilled,
           deepestFloor: this.deepestFloor,
         },
+        market: this.market.toJSON(),
       };
       saveSlot(this.currentSlot, data);
     } catch (e) {
@@ -389,6 +447,9 @@ export class Game {
       this.dungeon.floor = data.dungeon.floor;
       this.dungeon.enemies = data.dungeon.enemies;
       this.dungeon.items = data.dungeon.items;
+      this.dungeon.npcs = data.dungeon.npcs ?? [];
+      this.dungeon.recomputeStairsFromGrid();
+      this.market.fromJSON(data.market);
       this.dungeon.rooms = data.dungeon.rooms.map(r => {
         const room = { ...r, enemies: [] as unknown[], items: [] as unknown[], workStations: [] as unknown[] } as import('./world/Room.js').Room & { contains: (x: number, y: number) => boolean; getRandomFloorPosition: () => { x: number; y: number }; centerX: number; centerY: number };
         room.contains = (x: number, y: number) => x >= r.x && x < r.x + r.width && y >= r.y && y < r.y + r.height;

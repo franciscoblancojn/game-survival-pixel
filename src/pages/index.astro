@@ -3,6 +3,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 import Hub from '../components/Hub/index.astro';
 import Inventory from '../components/Inventory/index.astro';
 import Crafting from '../components/Crafting/index.astro';
+import Market from '../components/Market/index.astro';
 import Minimap from '../components/Minimap/index.astro';
 import Death from '../components/Death/index.astro';
 import ConfirmDialog from '../components/ConfirmDialog/index.astro';
@@ -19,6 +20,7 @@ import PauseMenu from '../components/PauseMenu/index.astro';
     <Hub/>
     <Inventory/>
     <Crafting/>
+    <Market/>
     <Minimap/>
     <Death/>
     <ConfirmDialog/>
@@ -56,7 +58,12 @@ import PauseMenu from '../components/PauseMenu/index.astro';
       document.getElementById('crafting-close-btn')?.addEventListener('click', () => {
         window.gameInstance?.toggleCrafting();
       });
-      
+
+      // Market (trading) close button
+      document.getElementById('market-close-btn')?.addEventListener('click', () => {
+        window.gameInstance?.closeTrade();
+      });
+
       // Minimap close button
       document.getElementById('minimap-close-btn')?.addEventListener('click', () => {
         window.gameInstance?.toggleMiniMap();

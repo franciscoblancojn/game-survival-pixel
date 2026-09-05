@@ -74,8 +74,11 @@ export class Hub {
     const goldEl = document.getElementById('hub-gold');
     if (goldEl) goldEl.textContent = `🪙 ${player.gold}`;
 
+    // El piso 0 es el mercado (Dungeon.generateMarket, ver skill
+    // npc-trading) — no es un piso procedural más, así que se etiqueta
+    // distinto en vez de mostrar "Piso 0".
     const floorEl = document.getElementById('hub-floor');
-    if (floorEl) floorEl.textContent = `📍 Piso ${floor}`;
+    if (floorEl) floorEl.textContent = floor === 0 ? '📍 Mercado' : `📍 Piso ${floor}`;
 
     // El log de mensajes NO se re-renderiza acá — antes se llamaba
     // renderMessages() en cada syncPlayerState (o sea, en cada turno,

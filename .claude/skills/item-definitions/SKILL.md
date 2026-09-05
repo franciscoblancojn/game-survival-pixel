@@ -1,6 +1,6 @@
 ---
 name: item-definitions
-description: Usar al crear un item nuevo o actualizar buff/valor/crafteo/efectoUso de uno existente en src/assets/items/. Invocar antes de tocar item_base.ts, cualquier archivo de un item concreto (rusty_sword.ts, health_potion.ts, ...), index.ts del registro, game/data/recipes.ts, o los sitios que consumen items (Dungeon.ts, TurnSystem.dropLoot, CraftingUI.ts).
+description: Usar al crear un item nuevo o actualizar buff/valorMinimo/valorMaximo/crafteo/efectoUso de uno existente en src/assets/items/. Invocar antes de tocar item_base.ts, cualquier archivo de un item concreto (rusty_sword.ts, health_potion.ts, ...), index.ts del registro, game/data/recipes.ts, o los sitios que consumen items (Dungeon.ts, TurnSystem.dropLoot, CraftingUI.ts, MarketUI.ts).
 ---
 
 # item-definitions — Crear y actualizar items (src/assets/items/)
@@ -9,7 +9,7 @@ description: Usar al crear un item nuevo o actualizar buff/valor/crafteo/efectoU
 
 | Archivo | Responsabilidad |
 |---|---|
-| `src/assets/items/item_base.ts` | Clase `ItemBase` — de la que heredan **todos** los items. Stats compartidos: `buff`, `efectoUso`, `valor`, `crafteo`, `estacion`, `descripcion`, etc. |
+| `src/assets/items/item_base.ts` | Clase `ItemBase` — de la que heredan **todos** los items. Stats compartidos: `buff`, `efectoUso`, `valorMinimo`/`valorMaximo`, `crafteo`, `estacion`, `descripcion`, etc. |
 | `src/assets/items/<tipo>.ts` | Un archivo por item (`rusty_sword.ts`, `health_potion.ts`, `wood.ts`, ...), clase que `extends ItemBase` y le pasa sus stats a `super({...})`. |
 | `src/assets/items/index.ts` | `ITEM_DEFINITIONS: Record<string, ItemBase>` — registro central y **única fuente de items del juego** (reemplaza el viejo `ITEM_TYPES` de `constants.ts`, retirado). |
 | `src/scripts/game/systems/ItemSystem.ts` | `createItemInstance(type, x, y, id, quantity?)` — única forma de construir una `ItemInstance` (la que consume el resto del motor) a partir de `ITEM_DEFINITIONS`. Devuelve `null` si el `type` no existe. |
@@ -45,7 +45,8 @@ Si en el futuro se pide un item nuevo, seguí el mismo patrón de abajo.
          name: 'Copa dorada',
          category: 'material',
          descripcion: 'Una copa ornamentada, buena para vender.',
-         valor: 15,
+         valorMinimo: 10,
+         valorMaximo: 20,
          icon: '🏆',
          color: '#ffd700',
          stackable: true,
@@ -84,9 +85,9 @@ cantidadCrafteo: 2,                // opcional, default 1 (p. ej. torch da 3, dr
 - `buildRecipes()` (`recipes.ts`) recorre `ITEM_DEFINITIONS` una sola vez al importar el módulo y agrupa cada entrada bajo `RECIPES[estacion][type]`. `canCraft`/`craft` (mismas firmas de siempre) no cambiaron — `CraftingUI.ts` no necesitó ningún cambio.
 - `craft()` construye el item resultante con `createItemInstance()` — **antes** armaba el objeto a mano y solo copiaba `icon`/`color`/`quantity`, así que craftear una espada daba un item sin `attack` (no se podía equipar) y craftear una poción daba uno sin `heal` (no curaba); además forzaba `stackable: true` sin mirar el item real. Ambos bugs se arreglaron de paso al migrar — si tocás `craft()` de nuevo, no vuelvas a armar el objeto a mano.
 
-## `valor` (oro de venta) — todavía no hay tienda
+## `valorMinimo`/`valorMaximo` (banda de precio) — el precio real vive en el NPC, no acá
 
-`valor` es la cantidad de oro que un comerciante pagaría por el item. **No existe todavía ninguna tienda ni forma de vender** (mismo estado que el oro del jugador, ver `CLAUDE.md`/skill `enemy-definitions`) — los valores actuales son de referencia, elegidos a criterio (materiales 1-3, consumibles 5-15, herramientas 2-8, armas/armaduras 10-40 escalando con su `buff`) porque no existían antes. Si se construye una tienda, ese es el campo a leer — no asumas que hay que construirla ahora.
+Estos dos campos NO son "el precio" de nada — son la banda `[valorMinimo, valorMaximo]` dentro de la cual puede moverse el **"valor actual"** de ese item en cualquier comerciante. El precio real, que sube al comprarlo y baja al venderlo, es estado dinámico por NPC y vive en `Market` (`src/scripts/game/Market.ts`), no en `ItemBase` — ver skill `npc-trading` antes de tocar esto. `ItemBase` solo pone el techo y el piso que ese precio nunca puede cruzar.
 
 ## Testing
 

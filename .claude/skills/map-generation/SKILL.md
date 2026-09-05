@@ -25,8 +25,10 @@ description: Usar al tocar la generación procedural de mazmorras — salas, pas
 6. Conexiones extra (~rooms.length/3) para crear loops — dedupeadas contra pares ya conectados
 7. addInternalWalls en salas >=7x7     — obstáculos, evita el centro y las puertas ya registradas
 8. placeEnemies(floor) / placeItems(floor)
-9. Escalera de bajada en el centro de la última sala
+9. Escalera de subida (stairsUpPos) en el centro de la sala inicial, de bajada (stairsDownPos) en el centro de la última
 ```
+
+Las dos escaleras y lo que pasa al pisarlas (incluido el mercado, piso 0) son responsabilidad de la skill `npc-trading`, no de esta — acá solo importa que `generateLevel`/`generateTestRoom` dejen `stairsUpPos`/`stairsDownPos` seteados y el tile correspondiente escrito en el grid.
 
 **Nunca elimines el paso 5 (cadena de `connectRooms`)** — es lo único que garantiza que las N salas formen un solo componente conexo. El bucle "extra" del paso 6 es solo para variedad (loops), no para conectividad.
 

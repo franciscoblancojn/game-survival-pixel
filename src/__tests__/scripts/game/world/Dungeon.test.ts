@@ -153,4 +153,58 @@ describe("Dungeon.generateLevel — generación de niveles", () => {
       ).toBeLessThanOrEqual(max);
     }
   });
+
+  // Escaleras de entrada/salida y mercado — ver skill npc-trading.
+  it("todo piso generado tiene stairsUpPos y stairsDownPos, y ambos coinciden con el grid", () => {
+    for (let i = 0; i < SEEDS; i++) {
+      const dungeon = new Dungeon();
+      dungeon.generateLevel(1 + (i % 8));
+
+      expect(dungeon.stairsUpPos, `seed ${i}: sin stairsUpPos`).not.toBeNull();
+      expect(dungeon.stairsDownPos, `seed ${i}: sin stairsDownPos`).not.toBeNull();
+
+      const up = dungeon.stairsUpPos!;
+      const down = dungeon.stairsDownPos!;
+      expect(dungeon.getTile(up.x, up.y)).toBe(TILE.STAIRS_UP);
+      expect(dungeon.getTile(down.x, down.y)).toBe(TILE.STAIRS_DOWN);
+    }
+  });
+
+  it("recomputeStairsFromGrid recalcula las mismas posiciones que generateLevel ya había fijado", () => {
+    const dungeon = new Dungeon();
+    dungeon.generateLevel(3);
+    const up = dungeon.stairsUpPos;
+    const down = dungeon.stairsDownPos;
+
+    dungeon.stairsUpPos = null;
+    dungeon.stairsDownPos = null;
+    dungeon.recomputeStairsFromGrid();
+
+    expect(dungeon.stairsUpPos).toEqual(up);
+    expect(dungeon.stairsDownPos).toEqual(down);
+  });
+});
+
+describe("Dungeon.generateMarket — piso 0", () => {
+  it("no tiene stairsUpPos (es la cima) pero sí stairsDownPos hacia el piso 1", () => {
+    const dungeon = new Dungeon();
+    dungeon.generateMarket();
+
+    expect(dungeon.floor).toBe(0);
+    expect(dungeon.stairsUpPos).toBeNull();
+    expect(dungeon.stairsDownPos).not.toBeNull();
+    expect(dungeon.getTile(dungeon.stairsDownPos!.x, dungeon.stairsDownPos!.y)).toBe(TILE.STAIRS_DOWN);
+  });
+
+  it("no tiene enemigos y coloca un NPC por cada entrada de NPC_DEFINITIONS", () => {
+    const dungeon = new Dungeon();
+    dungeon.generateMarket();
+
+    expect(dungeon.enemies).toHaveLength(0);
+    expect(dungeon.npcs.length).toBeGreaterThanOrEqual(3);
+
+    for (const npc of dungeon.npcs) {
+      expect(dungeon.getNpcAt(npc.x, npc.y)).toBe(npc);
+    }
+  });
 });

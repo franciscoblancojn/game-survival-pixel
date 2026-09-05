@@ -31,6 +31,15 @@ export class TurnSystem {
           break;
         }
 
+        const npc = dungeon.getNpcAt(newX, newY);
+        if (npc) {
+          // Hablar con un NPC no consume turno — mismo criterio que abrir
+          // el inventario o el crafteo, no una acción de juego. Ver skill
+          // npc-trading.
+          this.game.openTrade(npc);
+          break;
+        }
+
         if (player.canMoveTo(newX, newY, dungeon)) {
           player.x = newX;
           player.y = newY;
@@ -41,9 +50,16 @@ export class TurnSystem {
             this.playerPickup(item);
           }
 
+          // Escalera de entrada/salida de este piso (Dungeon.stairsUpPos/
+          // stairsDownPos) — ver skill npc-trading. `goDownStairs`/
+          // `goUpStairs` regeneran `dungeon` en el lugar (mismo objeto,
+          // nunca uno nuevo), así que la referencia `dungeon` desestructurada
+          // arriba sigue siendo válida para lo que resta de este turno.
           const tile = dungeon.getTile(newX, newY);
           if (tile === TILE.STAIRS_DOWN) {
-            this.game.addMessage('Pisas las escaleras...往下');
+            this.game.goDownStairs();
+          } else if (tile === TILE.STAIRS_UP) {
+            this.game.goUpStairs();
           }
         }
         break;

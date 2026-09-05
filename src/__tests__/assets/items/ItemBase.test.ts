@@ -13,7 +13,8 @@ function makeBase(overrides: Partial<ConstructorParameters<typeof ItemBase>[0]> 
     name: "Item de prueba",
     category: "material",
     descripcion: "Un item de prueba.",
-    valor: 5,
+    valorMinimo: 3,
+    valorMaximo: 8,
     icon: "❔",
     color: "#fff",
     ...overrides,
@@ -25,13 +26,15 @@ describe("ItemBase", () => {
     const item = makeBase({
       buff: { attack: 2, defense: 3 },
       efectoUso: { vida: 20, comida: 10 },
-      valor: 10,
+      valorMinimo: 6,
+      valorMaximo: 14,
       crafteo: { slime_ball: 1, stone: 2 },
       estacion: "workbench",
     });
     expect(item.buff).toEqual({ attack: 2, defense: 3 });
     expect(item.efectoUso).toEqual({ vida: 20, comida: 10 });
-    expect(item.valor).toBe(10);
+    expect(item.valorMinimo).toBe(6);
+    expect(item.valorMaximo).toBe(14);
     expect(item.crafteo).toEqual({ slime_ball: 1, stone: 2 });
     expect(item.estacion).toBe("workbench");
   });
@@ -55,12 +58,13 @@ describe("ITEM_DEFINITIONS (src/assets/items/)", () => {
     }
   });
 
-  it("cada item tiene icon, color, descripcion y valor definidos", () => {
+  it("cada item tiene icon, color, descripcion y banda de valor definidos", () => {
     for (const [key, def] of Object.entries(ITEM_DEFINITIONS)) {
       expect(def.icon, `${key} sin icon`).toBeTruthy();
       expect(def.color, `${key} sin color`).toBeTruthy();
       expect(def.descripcion, `${key} sin descripcion`).toBeTruthy();
-      expect(def.valor, `${key} sin valor`).toBeGreaterThanOrEqual(0);
+      expect(def.valorMinimo, `${key} sin valorMinimo`).toBeGreaterThanOrEqual(0);
+      expect(def.valorMaximo, `${key} valorMaximo < valorMinimo`).toBeGreaterThanOrEqual(def.valorMinimo);
     }
   });
 
@@ -118,17 +122,19 @@ describe("createItemInstance (src/scripts/game/systems/ItemSystem.ts)", () => {
 });
 
 describe("RECIPES (derivadas de ITEM_DEFINITIONS)", () => {
-  it("agrupa cada item craftable bajo su estacion", () => {
-    expect(RECIPES.workbench.rusty_sword.materials).toEqual({ wood: 3, stone: 1 });
-    expect(RECIPES.alchemy.health_potion.materials).toEqual({ wood: 2, stone: 1 });
+  it("agrupa cada item craftable bajo su estacion, con los materiales de su propia definición", () => {
+    expect(RECIPES.workbench.rusty_sword.materials).toEqual(ITEM_DEFINITIONS.rusty_sword.crafteo);
+    expect(RECIPES.alchemy.health_potion.materials).toEqual(ITEM_DEFINITIONS.health_potion.crafteo);
   });
 
   it("craft() devuelve un item con sus stats reales, no solo icon/color", () => {
     const recipe = RECIPES.alchemy.health_potion;
-    const inventory = [
-      { id: "1", type: "wood", name: "Madera", x: 0, y: 0, quantity: 2, stackable: true, icon: "🪵", color: "#8b4513" },
-      { id: "2", type: "stone", name: "Piedra", x: 0, y: 0, quantity: 1, stackable: true, icon: "🪨", color: "#888" },
-    ];
+    // Inventario armado a partir de lo que la receta pida en este momento —
+    // no hardcodea los ingredientes, así que sigue de pie si se rebalancea
+    // health_potion (como ya pasó una vez: era wood+stone, ahora slime_ball).
+    const inventory = Object.entries(recipe.materials).map(([type, count], i) => ({
+      id: `mat_${i}`, type, name: type, x: 0, y: 0, quantity: count, stackable: true, icon: '?', color: '#fff',
+    }));
     expect(canCraft(recipe, inventory)).toBe(true);
 
     const crafted = craft(recipe, inventory);

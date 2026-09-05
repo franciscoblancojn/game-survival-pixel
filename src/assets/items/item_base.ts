@@ -20,8 +20,14 @@ export interface ItemBaseStats {
   category: 'weapon' | 'armor' | 'tool' | 'consumable' | 'material';
   /** Texto de sabor mostrado en el detalle del inventario. */
   descripcion: string;
-  /** Oro que vale al venderlo a un comerciante. No hay tienda todavía — ver skill item-definitions. */
-  valor: number;
+  /**
+   * Banda de precio en la que puede moverse el "valor actual" de este item
+   * en cualquier comerciante — cada NPC (src/assets/npc/) tiene su propio
+   * precio actual por item, que sube al comprarlo y baja al venderlo, pero
+   * nunca sale de [valorMinimo, valorMaximo]. Ver skill npc-trading.
+   */
+  valorMinimo: number;
+  valorMaximo: number;
   icon: string;
   color: string;
   /** Bonos al equiparlo (solo weapon/armor). */
@@ -52,7 +58,8 @@ export class ItemBase implements ItemBaseStats {
   public readonly name: string;
   public readonly category: 'weapon' | 'armor' | 'tool' | 'consumable' | 'material';
   public readonly descripcion: string;
-  public readonly valor: number;
+  public readonly valorMinimo: number;
+  public readonly valorMaximo: number;
   public readonly icon: string;
   public readonly color: string;
   public readonly buff?: ItemBuff;
@@ -69,7 +76,8 @@ export class ItemBase implements ItemBaseStats {
     this.name = stats.name;
     this.category = stats.category;
     this.descripcion = stats.descripcion;
-    this.valor = stats.valor;
+    this.valorMinimo = stats.valorMinimo;
+    this.valorMaximo = stats.valorMaximo;
     this.icon = stats.icon;
     this.color = stats.color;
     this.buff = stats.buff;

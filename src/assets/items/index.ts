@@ -19,7 +19,7 @@ import { SlimeBall } from './slime_ball.js';
 
 /**
  * Registro central de definiciones de items: cada uno es una clase que
- * hereda de ItemBase, con buff/efectoUso/valor/crafteo. Es la única fuente
+ * hereda de ItemBase, con buff/efectoUso/valorMinimo/valorMaximo/crafteo. Es la única fuente
  * de verdad para qué items existen y cómo se craftean — el viejo ITEM_TYPES
  * plano (constants.ts) y la tabla RECIPES hardcodeada (game/data/recipes.ts)
  * se retiraron/derivaron de acá. Ver skill item-definitions antes de agregar

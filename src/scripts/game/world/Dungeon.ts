@@ -3,7 +3,8 @@ import { Room } from './Room.js';
 import { Tile } from './Tile.js';
 import { getMaxEnemies, createEnemyInstance } from '../systems/SpawnSystem.js';
 import { createItemInstance } from '../systems/ItemSystem.js';
-import type { TileType, EnemyInstance, ItemInstance, Difficulty } from '../../types.js';
+import { createNpcInstances } from '../systems/NpcSystem.js';
+import type { TileType, EnemyInstance, ItemInstance, NpcInstance, Difficulty } from '../../types.js';
 
 export class Dungeon {
   public width: number;
@@ -13,7 +14,12 @@ export class Dungeon {
   public corridors: { x: number; y: number }[][];
   public enemies: EnemyInstance[];
   public items: ItemInstance[];
+  public npcs: NpcInstance[];
   public floor: number;
+  /** Posición de la escalera de subida de este piso, o null si no tiene (el mercado). */
+  public stairsUpPos: { x: number; y: number } | null;
+  /** Posición de la escalera de bajada de este piso. */
+  public stairsDownPos: { x: number; y: number } | null;
 
   constructor() {
     this.width = MAP_WIDTH;
@@ -23,7 +29,10 @@ export class Dungeon {
     this.corridors = [];
     this.enemies = [];
     this.items = [];
+    this.npcs = [];
     this.floor = 1;
+    this.stairsUpPos = null;
+    this.stairsDownPos = null;
     this.initGrid();
   }
 
@@ -58,6 +67,29 @@ export class Dungeon {
     return this.items.find(i => i.x === x && i.y === y);
   }
 
+  getNpcAt(x: number, y: number): NpcInstance | undefined {
+    return this.npcs.find(n => n.x === x && n.y === y);
+  }
+
+  /**
+   * Recalcula `stairsUpPos`/`stairsDownPos` recorriendo el grid en busca de
+   * TILE.STAIRS_UP/STAIRS_DOWN — el grid ya persiste en el guardado (a
+   * diferencia de estos dos campos, que no se serializan aparte), así que
+   * cargar una ranura solo necesita esto para dejarlos consistentes de
+   * nuevo. Un piso sin una de las dos escaleras (el mercado no tiene
+   * STAIRS_UP) deja ese campo en null.
+   */
+  recomputeStairsFromGrid(): void {
+    this.stairsUpPos = null;
+    this.stairsDownPos = null;
+    for (let y = 0; y < this.height; y++) {
+      for (let x = 0; x < this.width; x++) {
+        if (this.grid[y][x] === TILE.STAIRS_UP) this.stairsUpPos = { x, y };
+        else if (this.grid[y][x] === TILE.STAIRS_DOWN) this.stairsDownPos = { x, y };
+      }
+    }
+  }
+
   removeEnemy(enemy: EnemyInstance): void {
     const idx = this.enemies.indexOf(enemy);
     if (idx !== -1) this.enemies.splice(idx, 1);
@@ -75,6 +107,9 @@ export class Dungeon {
     this.corridors = [];
     this.enemies = [];
     this.items = [];
+    this.npcs = [];
+    this.stairsUpPos = null;
+    this.stairsDownPos = null;
 
     // Generate rooms
     const numRooms = 5 + Math.floor(Math.random() * 4) + Math.floor(floor * 0.5);
@@ -177,7 +212,17 @@ export class Dungeon {
     this.placeEnemies(floor, difficulty);
     this.placeItems(floor);
 
+    // Escalera de entrada (sube al piso anterior, o al mercado desde el
+    // piso 1) en el centro de la sala inicial, y de salida (baja al
+    // siguiente piso) en el centro de la última sala — mismas posiciones
+    // que ya usa el jugador para aparecer al llegar a este piso desde
+    // cualquiera de las dos direcciones. Ver skill npc-trading.
+    const startRoom = this.rooms[0];
+    this.stairsUpPos = { x: startRoom.centerX, y: startRoom.centerY };
+    this.grid[startRoom.centerY][startRoom.centerX] = TILE.STAIRS_UP;
+
     const lastRoom = this.rooms[this.rooms.length - 1];
+    this.stairsDownPos = { x: lastRoom.centerX, y: lastRoom.centerY };
     this.grid[lastRoom.centerY][lastRoom.centerX] = TILE.STAIRS_DOWN;
   }
 
@@ -185,6 +230,9 @@ export class Dungeon {
     this.rooms = [];
     this.enemies = [];
     this.items = [];
+    this.npcs = [];
+    this.stairsUpPos = null;
+    this.stairsDownPos = null;
 
     const roomW = 12;
     const roomH = 10;
@@ -218,7 +266,47 @@ export class Dungeon {
       if (item) this.items.push(item);
     }
 
+    this.stairsUpPos = { x: room.centerX, y: room.centerY };
+    this.grid[room.centerY][room.centerX] = TILE.STAIRS_UP;
+
+    this.stairsDownPos = { x: room.centerX, y: room.centerY + 1 };
     this.grid[room.centerY + 1][room.centerX] = TILE.STAIRS_DOWN;
+  }
+
+  /**
+   * El mercado — piso 0, siempre igual (no procedural). Se entra subiendo
+   * las escaleras del piso 1 (`Game.goUpStairs`) y se sale bajando las de
+   * acá, que llevan de vuelta a un piso 1 recién generado. Sin enemigos, sin
+   * `stairsUpPos` (es la cima, no hay nada más arriba). Los NPCs son
+   * siempre los mismos — TODOS los registrados en NPC_DEFINITIONS
+   * (src/assets/npc/), no una selección al azar como los enemigos. Ver
+   * skill npc-trading.
+   */
+  generateMarket(): void {
+    this.floor = 0;
+    this.initGrid();
+    this.rooms = [];
+    this.corridors = [];
+    this.enemies = [];
+    this.items = [];
+    this.npcs = [];
+    this.stairsUpPos = null;
+    this.stairsDownPos = null;
+
+    const roomW = 16;
+    const roomH = 10;
+    const roomX = Math.floor((this.width - roomW) / 2);
+    const roomY = Math.floor((this.height - roomH) / 2);
+
+    const room = new Room(roomX, roomY, roomW, roomH, 'market');
+    room.writeTiles(this.grid);
+    room.explored = true;
+    this.rooms.push(room);
+
+    this.npcs = createNpcInstances(room);
+
+    this.stairsDownPos = { x: room.centerX, y: room.y + room.height - 2 };
+    this.grid[this.stairsDownPos.y][this.stairsDownPos.x] = TILE.STAIRS_DOWN;
   }
 
   connectRooms(roomA: Room, roomB: Room): void {

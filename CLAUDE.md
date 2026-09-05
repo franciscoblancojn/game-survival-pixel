@@ -54,8 +54,12 @@ src/
 │   └── index.ts                  # ENEMY_DEFINITIONS — registro central
 ├── assets/items/                # definiciones de items por clase (ver skill item-definitions)
 │   ├── item_base.ts              # clase ItemBase — de la que heredan todos
-│   ├── rusty_sword.ts             # un archivo por item (buff/valor/crafteo/efectoUso/descripcion)
+│   ├── rusty_sword.ts             # un archivo por item (buff/valorMinimo/valorMaximo/crafteo/efectoUso/descripcion)
 │   └── index.ts                  # ITEM_DEFINITIONS — registro central
+├── assets/npc/                   # definiciones de NPCs comerciantes (ver skill npc-trading)
+│   ├── npc_base.ts                # clase NpcBase — de la que heredan todos
+│   ├── herrero.ts                  # un archivo por NPC (inventario de tradeo + dialogos)
+│   └── index.ts                  # NPC_DEFINITIONS — registro central
 ├── state/
 │   ├── Base.ts                 # StateBase<T> genérica: estado + binding a DOM por placeholders __key__
 │   ├── Hub.ts                  # instancia `hub` (HP, hambre, nivel, stats) — expuesta en window.STATE
@@ -94,7 +98,8 @@ __tests__/                      # vitest + jsdom, ver `vitest.config.ts`
 | `difficulty` | Selección de dificultad (Fácil/Normal/Difícil), su persistencia y fórmulas de balance que dependen de ella | `DIFFICULTY_SETTINGS` en `constants.ts`, `Game.difficulty`, el paso de dificultad en `MainMenu.ts` |
 | `player-state` | HP/hambre/nivel del jugador, detección de muerte (combate o inanición), permadeath | `Player.ts`, `Entity.ts`, `TurnSystem.executeWorldEffects`/`executeEnemyTurns`, `Game.handleDeath` |
 | `enemy-definitions` | Crear o actualizar un enemigo (stats, vision, loot, oro) en `src/assets/enemies/` | `enemigo_base.ts`, cualquier `<tipo>.ts` de enemigo, `index.ts` del registro, `TurnSystem.dropLoot` |
-| `item-definitions` | Crear o actualizar un item (buff, valor, crafteo, efecto de uso) en `src/assets/items/` | `item_base.ts`, cualquier `<tipo>.ts` de item, `index.ts` del registro, `game/data/recipes.ts`, `ItemSystem.ts` |
+| `item-definitions` | Crear o actualizar un item (buff, valorMinimo/valorMaximo, crafteo, efecto de uso) en `src/assets/items/` | `item_base.ts`, cualquier `<tipo>.ts` de item, `index.ts` del registro, `game/data/recipes.ts`, `ItemSystem.ts` |
+| `npc-trading` | Escaleras de subida/bajada entre pisos, el mercado (piso 0), NPCs comerciantes, precios dinámicos | `src/assets/npc/`, `Dungeon.generateMarket`/`stairsUpPos`/`stairsDownPos`, `Market.ts`, `TradeSystem.ts`, `MarketUI.ts`/`.astro`, `Game.goDownStairs`/`goUpStairs`/`openTrade` |
 
 ## Sistema de estado (`StateBase<T>`)
 
@@ -112,10 +117,12 @@ __tests__/                      # vitest + jsdom, ver `vitest.config.ts`
 - **Dificultad**: se elige una sola vez al crear la partida (Fácil/Normal/Difícil, `MainMenu.ts` → `Game.startNewGame(slot, difficulty)`), persiste en la ranura de guardado, y hoy controla el divisor del tope de enemigos. Ver skill `difficulty`.
 - **Muerte y permadeath**: al llegar a 0 hp (combate o hambre en 0), `Game.handleDeath()` se dispara desde el único punto de chequeo al final de `TurnSystem.executePlayerAction` — antes NADIE lo llamaba (bug real, ya arreglado). Muestra la pantalla de muerte (sin botón "Continuar") y **borra la ranura de guardado** — permadeath, esa partida no se puede retomar. Ver skill `player-state`.
 - **Regeneración de vida**: mientras el jugador esté alimentado (`hunger > 0`), regenera 1 hp cada 10 turnos (`HP_REGEN_INTERVAL_TURNS`/`HP_REGEN_AMOUNT` en `constants.ts`, lógica en `TurnSystem.executeWorldEffects`); no regenera con hambre en 0 (ahí resta vida en su lugar). Ver skill `player-state`.
-- **Oro**: `player.gold` (persiste en la ranura de guardado, se muestra en el HUD junto a ataque/defensa). Entra por loot de enemigos (`src/assets/enemies/`) — cada item define además su propio `valor` de venta (`src/assets/items/`) pero no hay todavía tienda ni forma de gastarlo. Ver skills `enemy-definitions`/`item-definitions`.
-- **Definiciones de items** (`src/assets/items/`): sistema por clases (`ItemBase` + una subclase por tipo — armas/armaduras/herramientas/consumibles/materiales) con `buff` (ataque/defensa al equipar), `efectoUso` (vida/comida al consumir), `valor` (oro de venta), `descripcion` y `crafteo`/`estacion` (materiales y estación requeridos, si es crafteable). Es la única fuente de items — `ITEM_TYPES`/`ItemDef` (el sistema plano viejo) se retiraron al completar la migración, y `RECIPES` ahora se deriva de acá en vez de estar hardcodeado por separado. Ver skill `item-definitions` antes de crear o modificar un item.
+- **Oro**: `player.gold` (persiste en la ranura de guardado, se muestra en el HUD junto a ataque/defensa). Entra por loot de enemigos (`src/assets/enemies/`) y se gasta comprándole a los NPCs del mercado. Ver skills `enemy-definitions`/`item-definitions`/`npc-trading`.
+- **Definiciones de items** (`src/assets/items/`): sistema por clases (`ItemBase` + una subclase por tipo — armas/armaduras/herramientas/consumibles/materiales) con `buff` (ataque/defensa al equipar), `efectoUso` (vida/comida al consumir), `valorMinimo`/`valorMaximo` (banda de precio de venta — el precio real, dinámico, vive por NPC en `Market.ts`), `descripcion` y `crafteo`/`estacion` (materiales y estación requeridos, si es crafteable). Es la única fuente de items — `ITEM_TYPES`/`ItemDef` (el sistema plano viejo) se retiraron al completar la migración, y `RECIPES` ahora se deriva de acá en vez de estar hardcodeado por separado. Ver skill `item-definitions` antes de crear o modificar un item.
+- **Escaleras y pisos**: cada piso tiene una escalera de entrada (`stairsUpPos`, sube) y una de salida (`stairsDownPos`, baja) — antes solo existía la de bajada y ni siquiera estaba conectada a nada (`Game.goDownStairs()` era código muerto). Subir o bajar siempre regenera el piso de destino (sin backtracking persistente, salvo el mercado). Ver skill `npc-trading`.
+- **Mercado** (piso 0, `Dungeon.generateMarket()`): se entra subiendo desde el piso 1, en vez de a un piso 0 procedural. Fijo (no regenera en cada visita) con los NPCs de `src/assets/npc/` (`NPC_DEFINITIONS`) parados ahí — caminar hacia uno abre el comercio (`Game.openTrade`) sin gastar turno. Cada NPC compra/vende su propia lista de items (`inventario`) a un precio dinámico (`Market.ts`, sube al comprar/baja al vender, clampeado a `[valorMinimo, valorMaximo]` del item) y tiene diálogos propios (saludo/compra/venta/sinDinero/despedida). Ver skill `npc-trading`.
 - **Guardado**: 5 ranuras en localStorage (`SaveSlots.ts`), elegidas desde el menú principal Nueva partida/Continuar (`MainMenu.ts`); auto-guardado cada 30s + al cerrar sobre la ranura activa, versionado por `STORAGE_VERSION`. Ver skill `save-system`.
-- **Menú de pausa** (botón ⏸️ en la barra inferior, `PauseMenu.ts`): Continuar / Salir (guarda y vuelve al menú principal). `Game.state` pasa a `'paused'` mientras está abierto — bloquea input igual que inventario/crafteo, Escape lo cierra.
+- **Menú de pausa** (botón ⏸️ en la barra inferior, `PauseMenu.ts`): Continuar / Salir (guarda y vuelve al menú principal). `Game.state` pasa a `'paused'` mientras está abierto — bloquea input igual que inventario/crafteo/mercado, Escape lo cierra.
 
 Detalle completo del diseño y roadmap por fases: `INSTRUCCIONES.md`.
 
