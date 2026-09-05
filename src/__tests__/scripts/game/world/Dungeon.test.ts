@@ -80,6 +80,42 @@ describe("Dungeon.generateLevel — generación de niveles", () => {
     }
   });
 
+  it("toda puerta es un vano de una celda: 2 muros a los lados o arriba y abajo", () => {
+    for (let i = 0; i < SEEDS; i++) {
+      const dungeon = new Dungeon();
+      dungeon.generateLevel(1 + (i % 8));
+
+      const invalid = findDoorTiles(dungeon).filter(({ x, y }) => {
+        const left = dungeon.getTile(x - 1, y);
+        const right = dungeon.getTile(x + 1, y);
+        const up = dungeon.getTile(x, y - 1);
+        const down = dungeon.getTile(x, y + 1);
+
+        const verticalPass = left === TILE.WALL && right === TILE.WALL &&
+          WALKABLE.has(up) && WALKABLE.has(down);
+        const horizontalPass = up === TILE.WALL && down === TILE.WALL &&
+          WALKABLE.has(left) && WALKABLE.has(right);
+
+        return !verticalPass && !horizontalPass;
+      });
+
+      expect(invalid, `seed ${i}: puertas sin 2 muros enfrentados ${JSON.stringify(invalid)}`).toHaveLength(0);
+    }
+  });
+
+  it("mantiene sincronizado room.doors con las puertas reales del grid", () => {
+    for (let i = 0; i < SEEDS; i++) {
+      const dungeon = new Dungeon();
+      dungeon.generateLevel(1 + (i % 8));
+
+      const desynced = dungeon.rooms.flatMap(room =>
+        room.doors.filter(d => dungeon.getTile(d.x, d.y) !== TILE.DOOR)
+      );
+
+      expect(desynced, `seed ${i}: room.doors apunta a celdas que no son puerta`).toHaveLength(0);
+    }
+  });
+
   it("todas las salas son alcanzables desde la sala inicial", () => {
     for (let i = 0; i < SEEDS; i++) {
       const dungeon = new Dungeon();

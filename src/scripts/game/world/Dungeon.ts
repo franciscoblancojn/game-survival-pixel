@@ -1,5 +1,6 @@
 import { TILE, MAP_WIDTH, MAP_HEIGHT, ITEM_TYPES, DEFAULT_DIFFICULTY } from '../../constants.js';
 import { Room } from './Room.js';
+import { Tile } from './Tile.js';
 import { getMaxEnemies, createEnemyInstance } from '../systems/SpawnSystem.js';
 import type { TileType, EnemyInstance, ItemInstance, Difficulty } from '../../types.js';
 
@@ -154,6 +155,10 @@ export class Dungeon {
       connectedPairs.add(key);
       this.connectRooms(a, b);
     }
+
+    // Normaliza las puertas ANTES de los muros internos: `addInternalWalls`
+    // usa `room.doors`, así que necesita la lista ya depurada.
+    this.enforceDoorRule();
 
     for (const room of this.rooms) {
       if (room.width >= 7 && room.height >= 7) {
@@ -313,6 +318,197 @@ export class Dungeon {
     else if (y === room.y + room.height - 1) side = 'south';
 
     room.doors.push({ x, y, side, connected: true });
+  }
+
+  /**
+   * REGLA DE PUERTAS: una puerta es siempre un vano de UNA celda dentro de un
+   * muro — muros a izquierda y derecha (paso vertical) o arriba y abajo (paso
+   * horizontal), con las dos celdas del eje de paso transitables.
+   *
+   * `carveCorridor` no puede garantizarlo por sí solo: decide DOOR/CORRIDOR
+   * mirando solo el trayecto actual, y una segunda conexión puede perforar el
+   * mismo muro en la celda contigua (vano de 2 → puertas "dobles") o rodear de
+   * pasillo una celda ya convertida en puerta. Por eso la regla se aplica en
+   * esta pasada posterior, cuando el grid ya está completo.
+   */
+  private isValidDoorPlacement(x: number, y: number): boolean {
+    const left = this.getTile(x - 1, y);
+    const right = this.getTile(x + 1, y);
+    const up = this.getTile(x, y - 1);
+    const down = this.getTile(x, y + 1);
+
+    const verticalPass = left === TILE.WALL && right === TILE.WALL &&
+      Tile.isWalkable(up) && Tile.isWalkable(down);
+    const horizontalPass = up === TILE.WALL && down === TILE.WALL &&
+      Tile.isWalkable(left) && Tile.isWalkable(right);
+
+    return verticalPass || horizontalPass;
+  }
+
+  private doorTiles(): { x: number; y: number }[] {
+    const doors: { x: number; y: number }[] = [];
+    for (let y = 0; y < this.height; y++) {
+      for (let x = 0; x < this.width; x++) {
+        if (this.grid[y][x] === TILE.DOOR) doors.push({ x, y });
+      }
+    }
+    return doors;
+  }
+
+  private unregisterDoor(x: number, y: number): void {
+    for (const room of this.rooms) {
+      const idx = room.doors.findIndex(d => d.x === x && d.y === y);
+      if (idx !== -1) room.doors.splice(idx, 1);
+    }
+  }
+
+  /** Flood fill: ¿siguen todas las salas conectadas con la sala inicial? */
+  private allRoomsConnected(): boolean {
+    if (this.rooms.length === 0) return true;
+    const start = this.rooms[0];
+    const seen = new Set<number>([start.centerY * this.width + start.centerX]);
+    const stack: [number, number][] = [[start.centerX, start.centerY]];
+
+    while (stack.length > 0) {
+      const [cx, cy] = stack.pop()!;
+      const neighbors: [number, number][] = [
+        [cx + 1, cy], [cx - 1, cy], [cx, cy + 1], [cx, cy - 1],
+      ];
+      for (const [nx, ny] of neighbors) {
+        if (nx < 0 || nx >= this.width || ny < 0 || ny >= this.height) continue;
+        const key = ny * this.width + nx;
+        if (seen.has(key)) continue;
+        if (!Tile.isWalkable(this.grid[ny][nx])) continue;
+        seen.add(key);
+        stack.push([nx, ny]);
+      }
+    }
+
+    return this.rooms.every(r => seen.has(r.centerY * this.width + r.centerX));
+  }
+
+  /**
+   * Borra los pasillos que no llevan a ningún lado (callejones sin salida).
+   * Una celda con 1 o 0 vecinos transitables nunca está en el camino entre dos
+   * celdas distintas, así que quitarla jamás rompe la conectividad. Devuelve
+   * true si borró algo.
+   */
+  private pruneDeadEndCorridors(): boolean {
+    let removedAny = false;
+    let removed = true;
+
+    while (removed) {
+      removed = false;
+      for (let y = 0; y < this.height; y++) {
+        for (let x = 0; x < this.width; x++) {
+          if (this.grid[y][x] !== TILE.CORRIDOR) continue;
+          const walkable = [
+            this.getTile(x + 1, y), this.getTile(x - 1, y),
+            this.getTile(x, y + 1), this.getTile(x, y - 1),
+          ].filter(t => Tile.isWalkable(t)).length;
+          if (walkable <= 1) {
+            this.grid[y][x] = TILE.VOID;
+            removed = true;
+            removedAny = true;
+          }
+        }
+      }
+    }
+
+    return removedAny;
+  }
+
+  /**
+   * Aberturas del anillo de muro de cada sala (DOOR o CORRIDOR), sin repetir.
+   * Son las candidatas a puerta: lo que entra o sale de una sala.
+   */
+  private wallOpenings(): { x: number; y: number }[] {
+    const seen = new Set<number>();
+    const openings: { x: number; y: number }[] = [];
+
+    for (const room of this.rooms) {
+      for (let y = room.y; y < room.y + room.height; y++) {
+        for (let x = room.x; x < room.x + room.width; x++) {
+          const isBorder = y === room.y || y === room.y + room.height - 1 ||
+            x === room.x || x === room.x + room.width - 1;
+          if (!isBorder) continue;
+          const tile = this.grid[y][x];
+          if (tile !== TILE.DOOR && tile !== TILE.CORRIDOR) continue;
+          const key = y * this.width + x;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          openings.push({ x, y });
+        }
+      }
+    }
+
+    return openings;
+  }
+
+  /**
+   * Aplica la regla de puertas sobre el grid ya carvado.
+   *
+   * Toda abertura en el muro de una sala que no sea un vano de UNA celda se
+   * intenta SELLAR como muro — así el vano de 2 celdas que dejaban dos pasillos
+   * contiguos queda reducido a uno solo, que sí cumple la regla — y solo se
+   * sella si el nivel sigue conexo. Si sellarla dejaría una sala inalcanzable
+   * se deja abierta, pero como CORRIDOR: nunca se corta el paso (ver
+   * `carveCorridor`) y deja de ser puerta, que es lo que la regla exige.
+   */
+  private enforceDoorRule(): void {
+    for (let pass = 0; pass < 4; pass++) {
+      let changed = this.pruneDeadEndCorridors();
+
+      for (const { x, y } of this.wallOpenings()) {
+        const current = this.grid[y][x];
+        if (current !== TILE.DOOR && current !== TILE.CORRIDOR) continue;
+        if (this.isValidDoorPlacement(x, y)) continue;
+
+        this.grid[y][x] = TILE.WALL;
+        if (this.allRoomsConnected()) {
+          this.unregisterDoor(x, y);
+          changed = true;
+          continue;
+        }
+        this.grid[y][x] = current;
+      }
+
+      if (!changed) break;
+    }
+
+    // Lo que no se pudo sellar sin aislar una sala queda abierto como pasillo,
+    // nunca como puerta que rompa la regla.
+    for (const { x, y } of this.doorTiles()) {
+      if (this.isValidDoorPlacement(x, y)) continue;
+      this.grid[y][x] = TILE.CORRIDOR;
+      this.unregisterDoor(x, y);
+    }
+
+    this.promoteWallOpenings();
+  }
+
+  /**
+   * Al revés que el sellado: un vano en el muro de una sala que quedó como
+   * CORRIDOR (porque `carveCorridor` lo abrió sin considerarlo cruce real, o
+   * porque esta misma pasada degradó su vecino) pasa a ser PUERTA si cumple la
+   * regla. Solo se mira el anillo de muro de cada sala — un pasillo suelto que
+   * casualmente tenga muros a los lados no es una puerta, es un pasillo.
+   */
+  private promoteWallOpenings(): void {
+    for (const room of this.rooms) {
+      for (let y = room.y; y < room.y + room.height; y++) {
+        for (let x = room.x; x < room.x + room.width; x++) {
+          const isBorder = y === room.y || y === room.y + room.height - 1 ||
+            x === room.x || x === room.x + room.width - 1;
+          if (!isBorder) continue;
+          if (this.grid[y][x] !== TILE.CORRIDOR) continue;
+          if (!this.isValidDoorPlacement(x, y)) continue;
+
+          this.grid[y][x] = TILE.DOOR;
+          this.registerCorridorDoor(x, y);
+        }
+      }
+    }
   }
 
   placeEnemies(floor: number, difficulty: Difficulty = DEFAULT_DIFFICULTY): void {

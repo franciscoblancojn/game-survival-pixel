@@ -46,7 +46,20 @@ description: Usar al tocar la generación procedural de mazmorras — salas, pas
 
 3. **Ojo con la solución "obvia" de bloquear del todo las celdas que no son cruce real** — se probó y **rompió la conectividad**: ~31% de los niveles generados dejaban salas inalcanzables, porque un solo `WALL` sin convertir en medio de un pasillo recto corta el camino igual, sea o no un cruce "real". Por eso la celda SIEMPRE se abre (como `DOOR` o `CORRIDOR`); lo único que cambia es si cuenta como puerta o no.
 
-Si vas a tocar esta lógica, corre `src/__tests__/scripts/game/world/Dungeon.test.ts` (40 semillas, pisos 1-8) — verifica exactamente estas tres invariantes: cero puertas sin salida, cero salas inalcanzables desde la sala inicial, y tiras de puertas seguidas ≤ 4. Si tu cambio rompe alguna, no es un detalle cosmético — es una regresión a uno de estos dos bugs.
+Si vas a tocar esta lógica, corre `src/__tests__/scripts/game/world/Dungeon.test.ts` (40 semillas, pisos 1-8) — verifica exactamente estas invariantes: cero puertas sin salida, cero salas inalcanzables desde la sala inicial, tiras de puertas seguidas ≤ 4, y la regla de puertas de abajo. Si tu cambio rompe alguna, no es un detalle cosmético — es una regresión a uno de estos bugs.
+
+## Regla de puertas y `enforceDoorRule` (pasada posterior al carvado)
+
+**Una puerta es SIEMPRE un vano de una sola celda dentro de un muro**: muros a izquierda y derecha (paso vertical) o arriba y abajo (paso horizontal), con las dos celdas del eje de paso transitables. `carveCorridor` no puede garantizarlo solo — decide mirando únicamente el trayecto actual, así que una segunda conexión puede perforar el mismo muro en la celda contigua (vano de 2 = "puertas dobles" pegadas) o rodear de pasillo una celda ya convertida en puerta. Antes del arreglo, el **19,6 %** de las puertas generadas rompía la regla (61 % de los niveles tenía al menos una).
+
+Por eso `generateLevel` llama a `enforceDoorRule()` justo después de conectar las salas y **antes** de `addInternalWalls` (que consume `room.doors`, así que necesita la lista ya depurada). La pasada hace, iterando hasta estabilizar:
+
+1. `pruneDeadEndCorridors()` — borra pasillos con ≤1 vecino transitable (callejones sin salida). Nunca rompe conectividad: una celda con ≤1 vecino no está en el camino entre otras dos.
+2. Por cada abertura del anillo de muro de una sala (`wallOpenings()`, DOOR o CORRIDOR) que no cumpla la regla: se intenta **sellar** como `WALL` — con lo que la mitad sobrante de un vano de 2 desaparece y su hermana queda como puerta legal de 1 celda. El sellado solo se acepta si `allRoomsConnected()` sigue siendo cierto; si no, se revierte.
+3. Lo que no se pudo sellar sin aislar una sala queda **abierto como `CORRIDOR`**, nunca como puerta: se respeta la regla del punto 3 de arriba (jamás se corta el paso) sin dejar una puerta ilegal.
+4. `promoteWallOpenings()` — a la inversa: un vano de una celda que quedó como `CORRIDOR` y sí cumple la regla se asciende a `DOOR` y se registra en `room.doors`. Solo se mira el anillo de muro de las salas: un pasillo suelto con muros a los lados es un pasillo, no una puerta.
+
+Quedan ~1 abertura por nivel que sigue siendo pasillo y no puerta: las de **esquina** de sala (geométricamente nunca pueden cumplir la regla) y las que sellar dejaría una sala inalcanzable. Es intencional — no las conviertas en puerta "para que se vean mejor".
 
 ## Room — muros internos y puertas decorativas
 
@@ -72,5 +85,7 @@ Si vas a tocar esta lógica, corre `src/__tests__/scripts/game/world/Dungeon.tes
 1. Ninguna puerta tiene menos de 2 vecinos caminables (puerta sin salida).
 2. Todas las salas son alcanzables desde la sala inicial (flood fill).
 3. Ninguna tira de puertas seguidas supera 4 celdas.
+4. Toda puerta tiene 2 muros enfrentados (regla de puertas) y el eje de paso transitable.
+5. `room.doors` está sincronizado con el grid (toda entrada apunta a una celda `TILE.DOOR` real).
 
 Estas tres son el contrato de regresión de la generación de mapas — cualquier cambio en `Dungeon.ts`/`Room.ts` debe seguir pasándolas. Si necesitas relajar el límite del punto 3, hazlo con conocimiento de causa (ver la nota de las "puertas dobles" arriba) y no solo para hacer pasar un test.
