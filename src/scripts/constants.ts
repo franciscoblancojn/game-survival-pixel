@@ -1,4 +1,4 @@
-import type { TileType, ItemDef, Difficulty, DifficultySetting } from './types.js';
+import type { TileType, Difficulty, DifficultySetting } from './types.js';
 
 // === TILE TYPES ===
 export const TILE: Record<string, TileType> = {
@@ -104,28 +104,7 @@ export const COLORS = {
 // enemy-definitions antes de agregar un enemigo nuevo.
 
 // === ITEM TYPES ===
-export const ITEM_TYPES: Record<string, ItemDef> = {
-  // Weapons
-  rusty_sword: { name: 'Espada oxidada', type: 'weapon', attack: 3, icon: '⚔️', color: '#aaa' },
-  stone_axe: { name: 'Hacha de piedra', type: 'weapon', attack: 5, icon: '🪓', color: '#888' },
-  sharp_dagger: { name: 'Daga afilada', type: 'weapon', attack: 4, speed: 1, icon: '🗡️', color: '#ccc' },
-  // Armor
-  worn_tunic: { name: 'Túnica gastada', type: 'armor', defense: 2, icon: '👕', color: '#8b7355' },
-  chainmail: { name: 'Cota de malla', type: 'armor', defense: 5, icon: '🦺', color: '#888' },
-  iron_plate: { name: 'Pechera de hierro', type: 'armor', defense: 8, icon: '🛡️', color: '#666' },
-  // Tools
-  pickaxe: { name: 'Pico', type: 'tool', tool: 'mining', icon: '⛏️', color: '#888' },
-  shovel: { name: 'Pala', type: 'tool', tool: 'digging', icon: '🔧', color: '#8b7355' },
-  torch: { name: 'Antorcha', type: 'tool', tool: 'light', icon: '🔥', color: '#ffa500' },
-  // Consumables
-  health_potion: { name: 'Poción de vida', type: 'consumable', heal: 30, icon: '🧪', color: '#ff6b6b' },
-  hunger_potion: { name: 'Poción de hambre', type: 'consumable', hunger: 40, icon: '🍷', color: '#ffd93d' },
-  dried_ration: { name: 'Ración seca', type: 'consumable', hunger: 20, icon: '🍖', color: '#d2691e' },
-  // Materials
-  wood: { name: 'Madera', type: 'material', stackable: true, icon: '🪵', color: '#8b4513' },
-  stone: { name: 'Piedra', type: 'material', stackable: true, icon: '🪨', color: '#888' },
-  iron_ore: { name: 'Hierro', type: 'material', stackable: true, icon: '⬛', color: '#666' },
-  leather: { name: 'Cuero', type: 'material', stackable: true, icon: '🟫', color: '#8b4513' },
-  // Loot de enemigos (ver src/assets/enemies/)
-  slime_ball: { name: 'Bola de slime', type: 'material', stackable: true, icon: '🟢', color: '#2ecc71' },
-};
+// Todos los items ahora viven como clases en src/assets/items/
+// (ITEM_DEFINITIONS) — con buff/efectoUso/valor/crafteo. Este registro
+// plano se retiró al terminar la migración; ver skill item-definitions
+// antes de agregar un item nuevo.

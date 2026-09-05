@@ -1,7 +1,8 @@
 import { calculateDamage, damageEnemy, executeEnemyTurn } from './CombatSystem.js';
 import { trySpawnReplacementEnemy } from './SpawnSystem.js';
-import { TILE, HP_REGEN_INTERVAL_TURNS, HP_REGEN_AMOUNT, ITEM_TYPES } from '../../constants.js';
+import { TILE, HP_REGEN_INTERVAL_TURNS, HP_REGEN_AMOUNT } from '../../constants.js';
 import { ENEMY_DEFINITIONS } from '../../../assets/enemies/index.js';
+import { createItemInstance } from './ItemSystem.js';
 import type { PlayerAction, EnemyInstance, ItemInstance } from '../../types.js';
 import type { Game } from '../Game.js';
 
@@ -120,26 +121,17 @@ export class TurnSystem {
     }
 
     for (const drop of def.rollLoot()) {
-      const itemDef = ITEM_TYPES[drop.itemType];
-      if (!itemDef) continue;
+      const droppedItem = createItemInstance(
+        drop.itemType,
+        enemy.x,
+        enemy.y,
+        `loot_${enemy.id}_${drop.itemType}_${Date.now()}`,
+        drop.quantity
+      );
+      if (!droppedItem) continue;
 
-      const droppedItem: ItemInstance = {
-        id: `loot_${enemy.id}_${drop.itemType}_${Date.now()}`,
-        type: drop.itemType,
-        name: itemDef.name,
-        x: enemy.x,
-        y: enemy.y,
-        quantity: drop.quantity,
-        stackable: itemDef.stackable || false,
-        icon: itemDef.icon,
-        color: itemDef.color,
-        attack: itemDef.attack,
-        defense: itemDef.defense,
-        heal: itemDef.heal,
-        hunger: itemDef.hunger,
-      };
       this.game.dungeon.items.push(droppedItem);
-      this.game.addMessage(`${enemy.name} soltó ${drop.quantity}x ${itemDef.name}`);
+      this.game.addMessage(`${enemy.name} soltó ${drop.quantity}x ${droppedItem.name}`);
     }
   }
 

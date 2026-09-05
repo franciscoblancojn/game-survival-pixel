@@ -8,7 +8,6 @@ import {
   STORAGE_KEY,
   PLAYER_DEFAULTS,
   COLORS,
-  ITEM_TYPES,
 } from "../../scripts/constants.ts";
 import { ENEMY_DEFINITIONS } from "../../assets/enemies/index.ts";
 
@@ -116,26 +115,8 @@ describe("constants", () => {
     });
   });
 
-  describe("ITEM_TYPES", () => {
-    it("should have weapons", () => {
-      expect(ITEM_TYPES.rusty_sword.type).toBe("weapon");
-      expect(ITEM_TYPES.rusty_sword.attack).toBe(3);
-    });
-
-    it("should have consumables", () => {
-      expect(ITEM_TYPES.health_potion.type).toBe("consumable");
-      expect(ITEM_TYPES.health_potion.heal).toBe(30);
-    });
-
-    it("should have materials", () => {
-      expect(ITEM_TYPES.wood.type).toBe("material");
-      expect(ITEM_TYPES.wood.stackable).toBe(true);
-    });
-
-    it("each item should have an icon", () => {
-      for (const [key, item] of Object.entries(ITEM_TYPES)) {
-        expect(item.icon, `Item ${key} missing icon`).toBeTruthy();
-      }
-    });
-  });
+  // Todos los items viven hoy en ITEM_DEFINITIONS (src/assets/items/) — el
+  // viejo ITEM_TYPES plano de constants.ts se retiró al terminar la
+  // migración. Ver skill item-definitions y
+  // src/__tests__/assets/items/ItemBase.test.ts.
 });

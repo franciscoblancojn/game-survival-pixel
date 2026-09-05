@@ -6,19 +6,10 @@
 export type TileType = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 
 // --- Item ---
-export interface ItemDef {
-  name: string;
-  type: 'weapon' | 'armor' | 'tool' | 'consumable' | 'material';
-  attack?: number;
-  defense?: number;
-  heal?: number;
-  hunger?: number;
-  speed?: number;
-  tool?: string;
-  stackable?: boolean;
-  icon: string;
-  color: string;
-}
+// (la definición estática de cada tipo de item vive como clase en
+// src/assets/items/, no como interfaz plana acá — ver ItemBaseStats ahí.
+// ItemDef/ITEM_TYPES se retiraron al completar la migración, mismo criterio
+// que con los enemigos.)
 
 export interface ItemInstance {
   id: string;
@@ -72,7 +63,7 @@ export interface EnemyInstance {
 
 // --- Loot y oro (botín de enemigos, ver src/assets/enemies/) ---
 export interface LootDrop {
-  /** Clave en ITEM_TYPES (constants.ts) */
+  /** Clave en ITEM_DEFINITIONS (src/assets/items/) */
   itemType: string;
   /** Probabilidad de que caiga, 0-1 */
   chance: number;

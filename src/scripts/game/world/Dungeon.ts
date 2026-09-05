@@ -1,7 +1,8 @@
-import { TILE, MAP_WIDTH, MAP_HEIGHT, ITEM_TYPES, DEFAULT_DIFFICULTY } from '../../constants.js';
+import { TILE, MAP_WIDTH, MAP_HEIGHT, DEFAULT_DIFFICULTY } from '../../constants.js';
 import { Room } from './Room.js';
 import { Tile } from './Tile.js';
 import { getMaxEnemies, createEnemyInstance } from '../systems/SpawnSystem.js';
+import { createItemInstance } from '../systems/ItemSystem.js';
 import type { TileType, EnemyInstance, ItemInstance, Difficulty } from '../../types.js';
 
 export class Dungeon {
@@ -213,22 +214,8 @@ export class Dungeon {
     const testItems = ['rusty_sword', 'worn_tunic', 'wood', 'stone', 'health_potion'];
     for (const itemType of testItems) {
       const pos = room.getRandomFloorPosition();
-      const def = ITEM_TYPES[itemType];
-      this.items.push({
-        id: `item_${Date.now()}_${itemType}`,
-        type: itemType,
-        name: def.name,
-        x: pos.x,
-        y: pos.y,
-        quantity: 1,
-        stackable: def.stackable || false,
-        icon: def.icon,
-        color: def.color,
-        attack: def.attack,
-        defense: def.defense,
-        heal: def.heal,
-        hunger: def.hunger,
-      });
+      const item = createItemInstance(itemType, pos.x, pos.y, `item_${Date.now()}_${itemType}`);
+      if (item) this.items.push(item);
     }
 
     this.grid[room.centerY + 1][room.centerX] = TILE.STAIRS_DOWN;
@@ -545,22 +532,8 @@ export class Dungeon {
         for (let i = 0; i < count; i++) {
           const pos = room.getRandomFloorPosition();
           const type = materialTypes[Math.floor(Math.random() * materialTypes.length)];
-          const def = ITEM_TYPES[type];
-          this.items.push({
-            id: `item_${floor}_${room.x}_${room.y}_${i}`,
-            type,
-            name: def.name,
-            x: pos.x,
-            y: pos.y,
-            quantity: 1,
-            stackable: def.stackable || false,
-            icon: def.icon,
-            color: def.color,
-            attack: def.attack,
-            defense: def.defense,
-            heal: def.heal,
-            hunger: def.hunger,
-          });
+          const item = createItemInstance(type, pos.x, pos.y, `item_${floor}_${room.x}_${room.y}_${i}`);
+          if (item) this.items.push(item);
         }
       }
 
@@ -571,44 +544,16 @@ export class Dungeon {
           const allItems = [...materialTypes, ...consumableTypes,
             'rusty_sword', 'stone_axe', 'worn_tunic'];
           const type = allItems[Math.floor(Math.random() * allItems.length)];
-          const def = ITEM_TYPES[type];
-          this.items.push({
-            id: `item_${floor}_${room.x}_${room.y}_treasure_${i}`,
-            type,
-            name: def.name,
-            x: pos.x,
-            y: pos.y,
-            quantity: 1,
-            stackable: def.stackable || false,
-            icon: def.icon,
-            color: def.color,
-            attack: def.attack,
-            defense: def.defense,
-            heal: def.heal,
-            hunger: def.hunger,
-          });
+          const item = createItemInstance(type, pos.x, pos.y, `item_${floor}_${room.x}_${room.y}_treasure_${i}`);
+          if (item) this.items.push(item);
         }
       }
 
       if (room.type === 'workshop') {
         const pos = room.getRandomFloorPosition();
         const type = consumableTypes[Math.floor(Math.random() * consumableTypes.length)];
-        const def = ITEM_TYPES[type];
-        this.items.push({
-          id: `item_${floor}_${room.x}_${room.y}_workshop`,
-          type,
-          name: def.name,
-          x: pos.x,
-          y: pos.y,
-          quantity: 1,
-          stackable: def.stackable || false,
-          icon: def.icon,
-          color: def.color,
-          attack: def.attack,
-          defense: def.defense,
-          heal: def.heal,
-          hunger: def.hunger,
-        });
+        const item = createItemInstance(type, pos.x, pos.y, `item_${floor}_${room.x}_${room.y}_workshop`);
+        if (item) this.items.push(item);
       }
     }
   }
