@@ -4,6 +4,8 @@ import { getMaxEnemies } from "../../../../scripts/game/systems/SpawnSystem.ts";
 import { TILE } from "../../../../scripts/constants.ts";
 import type { Difficulty } from "../../../../scripts/types.ts";
 
+const SEEDS = 40;
+
 const WALKABLE = new Set<number>([
   TILE.FLOOR, TILE.DOOR, TILE.CORRIDOR, TILE.STAIRS_DOWN, TILE.STAIRS_UP,
 ]);
@@ -61,8 +63,6 @@ function longestStraightDoorRun(doors: { x: number; y: number }[]): number {
 // (hasta 8 seguidas), dejando esa sala sin muro en ese lado. Ver
 // docs/ARQUITECTURA.md y CLAUDE.md para el detalle.
 describe("Dungeon.generateLevel — generación de niveles", () => {
-  const SEEDS = 40;
-
   it("nunca genera una puerta sin pasillo/sala al otro lado (puerta a la nada)", () => {
     for (let i = 0; i < SEEDS; i++) {
       const dungeon = new Dungeon();
@@ -200,6 +200,68 @@ describe("Dungeon.generateLevel — generación de niveles", () => {
 
       expect(badItems, `seed ${i}: items sobre un muro ${JSON.stringify(badItems)}`).toHaveLength(0);
       expect(badEnemies, `seed ${i}: enemigos sobre un muro ${JSON.stringify(badEnemies)}`).toHaveLength(0);
+    }
+  });
+});
+
+// Grado de conectividad por sala y sala de comerciantes — ver skill
+// map-generation (regla de puertas) y npc-trading (sala cada 5 pisos).
+describe("Dungeon.generateLevel — conectividad y sala de comerciantes", () => {
+  it("cada piso tiene al menos 5 + ceil(piso / 3) salas", () => {
+    for (let i = 0; i < SEEDS; i++) {
+      const floor = 1 + (i % 20);
+      const dungeon = new Dungeon();
+      dungeon.generateLevel(floor);
+
+      const minRooms = 5 + Math.ceil(floor / 3);
+      expect(dungeon.rooms.length, `seed ${i} piso ${floor}: ${dungeon.rooms.length} salas, mínimo ${minRooms}`)
+        .toBeGreaterThanOrEqual(minRooms);
+    }
+  });
+
+  it("la gran mayoría de las salas quedan con 2 o 3 puertas (mejor esfuerzo, no absoluto — ver skill map-generation)", () => {
+    let total = 0;
+    let outOfBudget = 0;
+
+    for (let i = 0; i < SEEDS; i++) {
+      const dungeon = new Dungeon();
+      dungeon.generateLevel(1 + (i % 20));
+      for (const room of dungeon.rooms) {
+        total++;
+        if (room.doors.length < 2 || room.doors.length > 3) outOfBudget++;
+      }
+    }
+
+    // Medido empíricamente ~93% de cumplimiento — el piso de esta prueba
+    // (80%) deja margen para variación entre corridas sin volverse flaky,
+    // pero sigue detectando una regresión real si algo rompe el mecanismo.
+    expect(outOfBudget / total, `${outOfBudget}/${total} salas fuera de [2,3] puertas`).toBeLessThan(0.2);
+  });
+
+  it("cada piso %5 (y > 0) tiene una sala de comerciantes con los NPCs del mercado", () => {
+    for (let i = 0; i < SEEDS; i++) {
+      const floor = 5 * (1 + (i % 6)); // 5, 10, 15, 20, 25, 30
+      const dungeon = new Dungeon();
+      dungeon.generateLevel(floor);
+
+      const merchantRooms = dungeon.rooms.filter(r => r.type === 'merchant');
+      expect(merchantRooms, `piso ${floor}: sin sala de comerciantes`).toHaveLength(1);
+      expect(dungeon.npcs.length, `piso ${floor}: faltan NPCs`).toBeGreaterThanOrEqual(3);
+
+      for (const npc of dungeon.npcs) {
+        expect(merchantRooms[0].contains(npc.x, npc.y), `NPC ${npc.type} fuera de la sala de comerciantes`).toBe(true);
+      }
+    }
+  });
+
+  it("un piso que no es múltiplo de 5 no tiene sala de comerciantes ni NPCs", () => {
+    for (let i = 0; i < SEEDS; i++) {
+      const floor = 1 + (i % 4); // 1,2,3,4 — nunca múltiplo de 5
+      const dungeon = new Dungeon();
+      dungeon.generateLevel(floor);
+
+      expect(dungeon.rooms.some(r => r.type === 'merchant'), `piso ${floor} no debería tener sala de comerciantes`).toBe(false);
+      expect(dungeon.npcs).toHaveLength(0);
     }
   });
 });

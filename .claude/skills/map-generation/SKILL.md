@@ -17,20 +17,32 @@ description: Usar al tocar la generación procedural de mazmorras — salas, pas
 ## Flujo de `Dungeon.generateLevel(floor)`
 
 ```
-1. initGrid()                         — todo el grid a TILE.VOID
-2. Generar N salas rectangulares       — rechaza overlaps (margin=2), hasta numRooms*4 intentos
+1. initGrid()                          — todo el grid a TILE.VOID
+2. placeRooms(numRooms)                — mínimo 5 + ceil(piso/3) salas, con reintento achicando tamaño si no entran (ver abajo)
 3. rooms[0].type = 'start'; el resto sortea tipo (normal/enemy/treasure/workshop/trap)
-4. room.writeTiles(grid) para cada sala — borde = WALL, interior = FLOOR
-5. connectRooms(rooms[i], rooms[i+1]) encadenado — garantiza TODAS las salas conectadas
-6. Conexiones extra (~rooms.length/3) para crear loops — dedupeadas contra pares ya conectados
-7. addInternalWalls en salas >=7x7     — obstáculos, evita el centro y las puertas ya registradas
-8. placeEnemies(floor) / placeItems(floor)
-9. Escalera de subida (stairsUpPos) en el centro de la sala inicial, de bajada (stairsDownPos) en el centro de la última
+4. Cada 5 pisos (floor % 5 === 0): una sala al azar (nunca la inicial) pasa a type='merchant' — ver skill npc-trading
+5. room.writeTiles(grid) para cada sala — borde = WALL, interior = FLOOR
+6. connectRoomsWithDoorBudget()         — conecta salas por recorrido de vecino más cercano; cada sala termina con 2 o 3 puertas (ver abajo)
+7. enforceDoorRule() + ensureRoomDoorBudget() — normaliza puertas y repara salas que quedaron con menos de las pretendidas
+8. addInternalWalls en salas >=7x7      — obstáculos, evita el centro y las puertas ya registradas
+9. placeEnemies(floor) / placeItems(floor) — placeItems no tira materiales sueltos en la sala 'merchant'
+10. Si hay sala de comerciantes: createNpcInstances(merchantRoom, grid) — puebla esa sala con TODOS los NPCs
+11. Escalera de subida (stairsUpPos) en el centro de la sala inicial, de bajada (stairsDownPos) en el centro de la última
 ```
 
-Las dos escaleras y lo que pasa al pisarlas (incluido el mercado, piso 0) son responsabilidad de la skill `npc-trading`, no de esta — acá solo importa que `generateLevel`/`generateTestRoom` dejen `stairsUpPos`/`stairsDownPos` seteados y el tile correspondiente escrito en el grid.
+Las dos escaleras y lo que pasa al pisarlas (incluido el mercado, piso 0, y la sala de comerciantes cada 5 pisos) son responsabilidad de la skill `npc-trading`, no de esta — acá solo importa que `generateLevel`/`generateTestRoom` dejen `stairsUpPos`/`stairsDownPos` seteados y el tile correspondiente escrito en el grid.
 
-**Nunca elimines el paso 5 (cadena de `connectRooms`)** — es lo único que garantiza que las N salas formen un solo componente conexo. El bucle "extra" del paso 6 es solo para variedad (loops), no para conectividad.
+## Colocación de salas — mínimo garantizado, tamaño achicándose si hace falta
+
+`placeRooms(numRooms)` (llamada con `numRooms = minRooms + variedad`, `minRooms = 5 + Math.ceil(floor / 3)`) coloca rectángulos 5-10 sin solaparse (margin=2), hasta `numRooms * 30` intentos por ronda. Si con tamaño 5-10 no llegó a `numRooms` (mapa ya lleno — a partir de cierta profundidad el mínimo pide más salas de las que entran cómodas a ese tamaño en un `MAP_WIDTH x MAP_HEIGHT` fijo), **reintenta desde cero con salas más chicas**, hasta 4x4, en vez de resignarse con lo que entró al primer intento. Medido empíricamente, esto bajó la tasa de "no llegó al mínimo" de ~50-90% (con 1 sola ronda a tamaño fijo) a ~0.3% (con el reintento). Sigue siendo **mejor esfuerzo, no una garantía absoluta** — un mapa ya saturado hasta en 4x4 se queda con lo que entró. Con menos de 3 salas resultantes, `generateLevel` cae al fallback de `generateTestRoom()` (con 2 salas no hay forma de darle grado ≥2 a ambas — el único par posible las deja en 1).
+
+## Conectividad — `connectRoomsWithDoorBudget` (grado 2-3 por sala, no una cadena)
+
+**Nunca elimines la garantía de conectividad de un solo componente** — antes era una cadena (`rooms[i]` con `rooms[i+1]`); ahora es un anillo por recorrido de vecino más cercano (`nearestNeighborTour()`, arranca en la sala 0 y salta siempre a la no visitada más cercana), cerrado sobre sí mismo. Un anillo que visita las N salas es, por construcción, un componente conexo — no rompas esto sacando el cierre (última sala del recorrido con la primera) sin poner otra garantía equivalente en su lugar.
+
+Sobre ese anillo (que ya deja a cada sala en grado exactamente 2), una pasada extra sortea, sala por sala, subir a grado 3 conectándola con la candidata **más cercana** disponible (grado < 3, no conectada todavía). Preferir cercanía (acá y en el resto de este mecanismo) no es cosmético: un pasillo entre salas lejanas tiene mucha más chance de bordear/rozar el muro de una sala **distinta** de las dos que se querían conectar, y `registerCorridorDoor` le atribuye esa puerta a la que sea por `contains()` — inflando su cuenta de puertas por accidente y sin que la sala que de verdad la necesitaba la reciba.
+
+Ni `connectRoomsWithDoorBudget` ni `carveCorridor` pueden garantizar por sí solos que el grado *intentado* (2 o 3) se traduzca en `room.doors.length` real — un cruce puede caer en una esquina (nunca es una puerta válida, ver regla de puertas abajo) o `enforceDoorRule` puede sellarlo. Por eso corre después `ensureRoomDoorBudget()`: mientras una sala tenga menos de 2 puertas *registradas*, prueba conectarla con la candidata más cercana disponible — permite reintentar un par ya intentado antes (hasta 2 veces; `connectRooms` sortea el orden del recodo en L, así que un segundo intento puede tomar un camino distinto y sí registrar la puerta) — y vuelve a correr `enforceDoorRule()` para chequear en el momento si sirvió. Hasta 8 pasadas. Es **mejor esfuerzo, no una garantía absoluta**: medido empíricamente, ~93% de las salas terminan en el rango [2,3] puertas; el resto (esquinas irrecuperables, o alguna sala que de casualidad terminó con 4+ por una puerta ajena mal atribuida) queda fuera del rango — ver el test correspondiente, que verifica el % agregado, no que sea el 100% de las salas.
 
 ## `carveCorridor` — cómo se abren las puertas (léelo ANTES de tocarlo)
 
@@ -79,17 +91,21 @@ Quedan ~1 abertura por nivel que sigue siendo pasillo y no puerta: las de **esqu
 | `treasure` | 15% | 2-4 items en `placeItems` |
 | `workshop` | 15% | 1 consumible especial |
 | `trap` | 15% | sin contenido especial hoy (reservado) |
+| `merchant` | fija, 1 por piso, solo si `floor % 5 === 0` | los NPCs del mercado (`createNpcInstances`) — sin enemigos, sin materiales sueltos. Ver skill npc-trading |
 
 `placeEnemies`/`placeItems` escalan stats con `floor` (`hp * (1 + floor*0.15)`, `attack`/`defense * (1 + floor*0.1)`) — si cambias el balance, hazlo ahí, no en `CombatSystem.ts` (ver skill del sistema de combate en `CLAUDE.md` si existe, o `src/scripts/game/systems/`).
 
 ## Testing
 
-`src/__tests__/scripts/game/world/Dungeon.test.ts` — sin DOM, instancia `Dungeon` real y corre `generateLevel` sobre 40 semillas (pisos 1-8):
+`src/__tests__/scripts/game/world/Dungeon.test.ts` — sin DOM, instancia `Dungeon` real y corre `generateLevel` sobre 40 semillas (pisos 1-8, salvo donde se indica):
 1. Ninguna puerta tiene menos de 2 vecinos caminables (puerta sin salida).
 2. Todas las salas son alcanzables desde la sala inicial (flood fill).
 3. Ninguna tira de puertas seguidas supera 4 celdas.
 4. Toda puerta tiene 2 muros enfrentados (regla de puertas) y el eje de paso transitable.
 5. `room.doors` está sincronizado con el grid (toda entrada apunta a una celda `TILE.DOOR` real).
 6. Ningún item ni enemigo se coloca sobre `TILE.WALL` (incluidos los muros internos de `addInternalWalls`).
+7. Cada piso (1-20) tiene al menos `5 + ceil(piso / 3)` salas — invariante dura (100%), gracias al reintento de `placeRooms`.
+8. Menos del 20% de las salas, agregado sobre 40 semillas, queda fuera de [2,3] puertas — invariante estadística, no del 100% (ver nota de mejor esfuerzo arriba). Si tocás `connectRoomsWithDoorBudget`/`ensureRoomDoorBudget` y este número empeora sensiblemente, es una regresión real, no ruido.
+9. Todo piso con `floor % 5 === 0` tiene exactamente una sala `type==='merchant'` con los NPCs del mercado adentro; un piso que no es múltiplo de 5 no tiene ninguna.
 
-Estas tres son el contrato de regresión de la generación de mapas — cualquier cambio en `Dungeon.ts`/`Room.ts` debe seguir pasándolas. Si necesitas relajar el límite del punto 3, hazlo con conocimiento de causa (ver la nota de las "puertas dobles" arriba) y no solo para hacer pasar un test.
+Estas son el contrato de regresión de la generación de mapas — cualquier cambio en `Dungeon.ts`/`Room.ts` debe seguir pasándolas. Si necesitas relajar el límite del punto 3, hazlo con conocimiento de causa (ver la nota de las "puertas dobles" arriba) y no solo para hacer pasar un test.

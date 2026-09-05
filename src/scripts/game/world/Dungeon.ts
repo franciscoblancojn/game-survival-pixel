@@ -171,6 +171,44 @@ export class Dungeon {
     if (idx !== -1) this.items.splice(idx, 1);
   }
 
+  /**
+   * Coloca hasta `numRooms` salas rectangulares sin solaparse (margin=2) en
+   * `this.rooms`. Empieza con salas 5-10 y, si con eso no alcanza el
+   * objetivo (mapa ya muy lleno — típico cuando el mínimo de salas del
+   * piso, `5 + ceil(piso/3)`, empieza a pedir más de las que entran
+   * cómodas a ese tamaño), reintenta con salas cada vez más chicas hasta
+   * 4x4 — medido empíricamente, esto lleva la tasa de "no llegó al
+   * mínimo" de ~50-90% a ~0.3%. Sigue siendo mejor esfuerzo, no una
+   * garantía absoluta: un mapa ya saturado en 4x4 se queda con lo que
+   * entró.
+   */
+  private placeRooms(numRooms: number): void {
+    let minRoomSize = 5;
+    let maxRoomSize = 10;
+
+    for (let round = 0; round < 8; round++) {
+      this.rooms = [];
+
+      for (let i = 0; i < numRooms * 30; i++) {
+        if (this.rooms.length >= numRooms) break;
+
+        const w = minRoomSize + Math.floor(Math.random() * (maxRoomSize - minRoomSize + 1));
+        const h = minRoomSize + Math.floor(Math.random() * (maxRoomSize - minRoomSize + 1));
+        const x = 2 + Math.floor(Math.random() * (this.width - w - 4));
+        const y = 2 + Math.floor(Math.random() * (this.height - h - 4));
+
+        const newRoom = new Room(x, y, w, h, 'normal');
+        const overlapsAny = this.rooms.some(existing => newRoom.overlaps(existing));
+        if (!overlapsAny) this.rooms.push(newRoom);
+      }
+
+      if (this.rooms.length >= numRooms || maxRoomSize <= 4) return;
+
+      maxRoomSize = Math.max(4, maxRoomSize - 1);
+      minRoomSize = Math.min(minRoomSize, maxRoomSize);
+    }
+  }
+
   generateLevel(floor: number, difficulty: Difficulty = DEFAULT_DIFFICULTY): void {
     this.floor = floor;
     this.initGrid();
@@ -182,35 +220,16 @@ export class Dungeon {
     this.stairsUpPos = null;
     this.stairsDownPos = null;
 
-    // Generate rooms
-    const numRooms = 5 + Math.floor(Math.random() * 4) + Math.floor(floor * 0.5);
-    const minRoomSize = 5;
-    const maxRoomSize = 10;
+    // Generate rooms — mínimo 5 + ceil(piso / 3), con variedad extra por
+    // encima de ese mínimo.
+    const minRooms = 5 + Math.ceil(floor / 3);
+    const numRooms = minRooms + Math.floor(Math.random() * 4);
+    this.placeRooms(numRooms);
 
-    for (let i = 0; i < numRooms * 4; i++) {
-      if (this.rooms.length >= numRooms) break;
-
-      const w = minRoomSize + Math.floor(Math.random() * (maxRoomSize - minRoomSize));
-      const h = minRoomSize + Math.floor(Math.random() * (maxRoomSize - minRoomSize));
-      const x = 2 + Math.floor(Math.random() * (this.width - w - 4));
-      const y = 2 + Math.floor(Math.random() * (this.height - h - 4));
-
-      const newRoom = new Room(x, y, w, h, 'normal');
-
-      let overlaps = false;
-      for (const existing of this.rooms) {
-        if (newRoom.overlaps(existing)) {
-          overlaps = true;
-          break;
-        }
-      }
-
-      if (!overlaps) {
-        this.rooms.push(newRoom);
-      }
-    }
-
-    if (this.rooms.length < 2) {
+    // Con menos de 3 salas no hay forma de darle 2-3 puertas a cada una
+    // (con 2 salas el único par posible ya dejaría a ambas en grado 1) —
+    // fallback a la sala aislada de prueba, mismo criterio que con <2.
+    if (this.rooms.length < 3) {
       this.generateTestRoom();
       return;
     }
@@ -232,40 +251,33 @@ export class Dungeon {
       }
     }
 
+    // Cada 5 pisos hay una sala de comerciantes — nunca la inicial (ahí ya
+    // aparece el jugador). Reemplaza el tipo que le haya tocado en el
+    // sorteo de arriba: una sala de comerciantes no tiene enemigos/tesoro
+    // propios (placeEnemies/placeItems no reconocen 'merchant', así que
+    // simplemente no le agregan nada de eso). Ver skill npc-trading.
+    let merchantRoom: Room | null = null;
+    if (floor > 0 && floor % 5 === 0) {
+      merchantRoom = this.rooms[1 + Math.floor(Math.random() * (this.rooms.length - 1))];
+      merchantRoom.type = 'merchant';
+    }
+
     for (const room of this.rooms) {
       room.writeTiles(this.grid);
     }
 
-    const connectedPairs = new Set<string>();
-    const pairKey = (a: Room, b: Room): string => {
-      const ia = this.rooms.indexOf(a);
-      const ib = this.rooms.indexOf(b);
-      return ia < ib ? `${ia}-${ib}` : `${ib}-${ia}`;
-    };
+    // Conecta las salas de forma que TODAS terminen con 2 o 3 puertas
+    // (grado 2-3 en el grafo de salas) — nunca menos de 2 ni más de 3. Ver
+    // skill map-generation.
+    this.connectRoomsWithDoorBudget();
 
-    for (let i = 0; i < this.rooms.length - 1; i++) {
-      const roomA = this.rooms[i];
-      const roomB = this.rooms[i + 1];
-      this.connectRooms(roomA, roomB);
-      connectedPairs.add(pairKey(roomA, roomB));
-    }
-
-    // Conexiones extra (crean loops) — evitamos volver a conectar un par de
-    // salas que ya está unido, para no carvar un segundo pasillo/puerta
-    // redundante hacia la misma sala vecina.
-    for (let i = 0; i < Math.floor(this.rooms.length / 3); i++) {
-      const a = this.rooms[Math.floor(Math.random() * this.rooms.length)];
-      const b = this.rooms[Math.floor(Math.random() * this.rooms.length)];
-      if (a === b) continue;
-      const key = pairKey(a, b);
-      if (connectedPairs.has(key)) continue;
-      connectedPairs.add(key);
-      this.connectRooms(a, b);
-    }
-
-    // Normaliza las puertas ANTES de los muros internos: `addInternalWalls`
-    // usa `room.doors`, así que necesita la lista ya depurada.
+    // Normaliza las puertas y repara salas que se quedaron con menos
+    // puertas *registradas* de las que el paso de arriba pretendía
+    // (esquinas, dobles selladas) — ver `ensureRoomDoorBudget`. Todo esto
+    // ANTES de los muros internos: `addInternalWalls` usa `room.doors`, así
+    // que necesita la lista ya depurada y final.
     this.enforceDoorRule();
+    this.ensureRoomDoorBudget();
 
     for (const room of this.rooms) {
       if (room.width >= 7 && room.height >= 7) {
@@ -282,6 +294,9 @@ export class Dungeon {
 
     this.placeEnemies(floor, difficulty);
     this.placeItems(floor);
+    if (merchantRoom) {
+      this.npcs = createNpcInstances(merchantRoom, this.grid);
+    }
 
     // Escalera de entrada (sube al piso anterior, o al mercado desde el
     // piso 1) en el centro de la sala inicial, y de salida (baja al
@@ -374,10 +389,184 @@ export class Dungeon {
     room.explored = true;
     this.rooms.push(room);
 
-    this.npcs = createNpcInstances(room);
-
+    // Antes de colocar los NPCs: getRandomFloorPosition() exige TILE.FLOOR,
+    // así que la escalera ya escrita en el grid queda protegida de que un
+    // NPC caiga justo ahí (bloquearía la transición de piso — TurnSystem
+    // chequea NPC antes que escalera al pisar una celda).
     this.stairsDownPos = { x: room.centerX, y: room.y + room.height - 2 };
     this.grid[this.stairsDownPos.y][this.stairsDownPos.x] = TILE.STAIRS_DOWN;
+
+    this.npcs = createNpcInstances(room, this.grid);
+  }
+
+  private static pairKey(i: number, j: number): string {
+    return i < j ? `${i}-${j}` : `${j}-${i}`;
+  }
+
+  private roomDistSq(i: number, j: number): number {
+    const dx = this.rooms[i].centerX - this.rooms[j].centerX;
+    const dy = this.rooms[i].centerY - this.rooms[j].centerY;
+    return dx * dx + dy * dy;
+  }
+
+  /**
+   * Recorrido de vecino más cercano sobre `this.rooms`: arranca en la sala
+   * 0 y en cada paso salta a la sala no visitada más cercana a la última.
+   * Conectar en ESTE orden (en vez del orden de colocación, que es
+   * espacialmente arbitrario) mantiene los pasillos cortos y directos —
+   * clave para `ensureRoomDoorBudget`: un pasillo largo entre salas lejanas
+   * tiene mucha más chance de bordear/rozar el muro de una sala DISTINTA
+   * de las dos que se querían conectar, y `registerCorridorDoor` le
+   * atribuye esa puerta a la sala que sea (por `contains()`), no a las dos
+   * pensadas — inflando su cuenta de puertas por accidente.
+   */
+  private nearestNeighborTour(): number[] {
+    const n = this.rooms.length;
+    const visited = new Array(n).fill(false);
+    const tour = [0];
+    visited[0] = true;
+
+    for (let step = 1; step < n; step++) {
+      const last = tour[tour.length - 1];
+      let best = -1;
+      let bestDist = Infinity;
+      for (let j = 0; j < n; j++) {
+        if (visited[j]) continue;
+        const dist = this.roomDistSq(last, j);
+        if (dist < bestDist) {
+          bestDist = dist;
+          best = j;
+        }
+      }
+      tour.push(best);
+      visited[best] = true;
+    }
+
+    return tour;
+  }
+
+  /** `candidates` ordenados por cercanía a `from` — para preferir conexiones cortas al agregar puertas extra/de reparación. */
+  private sortByDistanceTo(from: number, candidates: number[]): number[] {
+    return [...candidates].sort((a, b) => this.roomDistSq(from, a) - this.roomDistSq(from, b));
+  }
+
+  /**
+   * Conecta `this.rooms` de forma que TODAS terminen con grado 2 o 3 en el
+   * grafo de salas (2 o 3 puertas cada una) — nunca menos de 2 (toda sala
+   * queda con más de una salida) ni más de 3.
+   *
+   * 1. Anillo por cercanía (`nearestNeighborTour`): sala del recorrido k con
+   *    la k+1, y la última con la primera. Con N salas (N siempre ≥ 3 acá —
+   *    antes de llamar esto ya se descartó el caso N<3 con
+   *    `generateTestRoom`) esto deja a CADA sala en grado exactamente 2.
+   * 2. Extra: por sala, ~50% de probabilidad de subir a 3 — se conecta con
+   *    la más cercana entre las salas candidatas (grado < 3, no conectada
+   *    todavía). Si no hay candidata válida, se queda en 2 (una sala nunca
+   *    se queda en 1 salida por esto, la garantía es del punto 1).
+   *
+   * El anillo por sí solo ya garantiza que todas las salas quedan
+   * conectadas en un solo componente (es un ciclo que las visita a todas),
+   * así que esto no rompe la invariante de conectividad de `map-generation`.
+   */
+  private connectRoomsWithDoorBudget(): void {
+    const n = this.rooms.length;
+    const degree = new Array(n).fill(0);
+    const connectedPairs = new Set<string>();
+    const tour = this.nearestNeighborTour();
+
+    for (let k = 0; k < n; k++) {
+      const i = tour[k];
+      const j = tour[(k + 1) % n];
+      const key = Dungeon.pairKey(i, j);
+      if (connectedPairs.has(key)) continue; // n === 2 (no debería pasar, ver guard de arriba): evita carvar el mismo par dos veces
+      connectedPairs.add(key);
+      this.connectRooms(this.rooms[i], this.rooms[j]);
+      degree[i]++;
+      degree[j]++;
+    }
+
+    for (let i = 0; i < n; i++) {
+      if (degree[i] >= 3) continue;
+      if (Math.random() < 0.5) continue;
+
+      const candidates: number[] = [];
+      for (let j = 0; j < n; j++) {
+        if (j === i || degree[j] >= 3 || connectedPairs.has(Dungeon.pairKey(i, j))) continue;
+        candidates.push(j);
+      }
+      if (candidates.length === 0) continue;
+
+      const nearest = this.sortByDistanceTo(i, candidates);
+      const j = nearest[0];
+      connectedPairs.add(Dungeon.pairKey(i, j));
+      this.connectRooms(this.rooms[i], this.rooms[j]);
+      degree[i]++;
+      degree[j]++;
+    }
+
+  }
+
+  /**
+   * `connectRoomsWithDoorBudget` decide CUÁNTAS conexiones intenta cada
+   * sala, pero no todo intento termina en una puerta registrada: el punto
+   * de quiebre de un pasillo en L a veces cae justo en una esquina de la
+   * sala (o `enforceDoorRule` termina degradándolo a `CORRIDOR` para no
+   * aislar otra sala) — ver la nota de "esquinas" en la skill
+   * map-generation. Eso puede dejar a una sala con menos puertas
+   * *registradas* de las que el grafo de conexión pretendía.
+   *
+   * Esta pasada corre DESPUÉS de `enforceDoorRule()` (que es cuando
+   * `room.doors` ya refleja la realidad) y repara: mientras una sala tenga
+   * menos de 2 puertas, se le agrega una conexión nueva hacia la sala
+   * candidata más cercana con la que no se había intentado todavía, y se
+   * vuelve a correr `enforceDoorRule()`. Hasta 3 pasadas — es un intento de
+   * mejor esfuerzo, no una garantía absoluta: en una sala minúscula
+   * rodeada de esquinas podría seguir quedando en 1 puerta.
+   */
+  private ensureRoomDoorBudget(): void {
+    const n = this.rooms.length;
+    const attemptsPerPair = new Map<string, number>();
+    const MAX_ATTEMPTS_PER_PAIR = 2; // `connectRooms` sortea el orden del recodo en L — un segundo intento al mismo par puede tomar un camino distinto y sí registrar la puerta
+
+    for (let pass = 0; pass < 8; pass++) {
+      let changed = false;
+
+      for (let i = 0; i < n; i++) {
+        if (this.rooms[i].doors.length >= 2) continue;
+
+        const candidates: number[] = [];
+        for (let j = 0; j < n; j++) {
+          if (j === i || this.rooms[j].doors.length >= 3) continue;
+          // A diferencia de `connectRoomsWithDoorBudget`, acá SÍ se permite
+          // reintentar un par ya conectado antes: si esa conexión no llegó
+          // a registrar una puerta para `i` (esquina, sellado de
+          // `enforceDoorRule`), es la única forma de recuperarla.
+          const key = Dungeon.pairKey(i, j);
+          if ((attemptsPerPair.get(key) ?? 0) >= MAX_ATTEMPTS_PER_PAIR) continue;
+          candidates.push(j);
+        }
+        if (candidates.length === 0) continue;
+
+        // Prueba las candidatas de más cerca a más lejos hasta que UNA
+        // realmente aumente `room.doors.length` — un intento puede fallar
+        // en silencio (esquina, ver nota de arriba), y si no volvemos a
+        // chequear enseguida (`enforceDoorRule` por intento, no recién al
+        // final de la pasada) quedaría sin detectarlo hasta la próxima
+        // pasada, o nunca si se acaban las pasadas.
+        const before = this.rooms[i].doors.length;
+        for (const j of this.sortByDistanceTo(i, candidates)) {
+          if (this.rooms[j].doors.length >= 3) continue; // pudo cambiar en un intento anterior de esta misma pasada
+          const key = Dungeon.pairKey(i, j);
+          attemptsPerPair.set(key, (attemptsPerPair.get(key) ?? 0) + 1);
+          this.connectRooms(this.rooms[i], this.rooms[j]);
+          this.enforceDoorRule();
+          changed = true;
+          if (this.rooms[i].doors.length > before) break;
+        }
+      }
+
+      if (!changed) break;
+    }
   }
 
   connectRooms(roomA: Room, roomB: Room): void {
@@ -686,7 +875,12 @@ export class Dungeon {
     const consumableTypes = ['health_potion', 'hunger_potion', 'dried_ration'];
 
     for (const room of this.rooms) {
-      if (Math.random() < 0.6) {
+      // La sala de comerciantes (cada 5 pisos, ver skill npc-trading) no
+      // recibe materiales sueltos: el suelo lo ocupan los NPCs
+      // (createNpcInstances), y un item debajo de un NPC quedaría
+      // inalcanzable — TurnSystem abre el comercio al pisar esa celda,
+      // antes de llegar a recogerlo.
+      if (room.type !== 'merchant' && Math.random() < 0.6) {
         const count = 1 + Math.floor(Math.random() * 3);
         for (let i = 0; i < count; i++) {
           const pos = room.getRandomFloorPosition(this.grid);
