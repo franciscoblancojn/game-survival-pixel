@@ -321,7 +321,7 @@ export class Dungeon {
     room.addInternalWalls(this.grid, 3);
 
     for (let i = 0; i < 2; i++) {
-      const pos = room.getRandomFloorPosition();
+      const pos = room.getRandomFloorPosition(this.grid);
       if (Math.abs(pos.x - room.centerX) > 1 || Math.abs(pos.y - room.centerY) > 1) {
         // Mismo camino que placeEnemies: elige de ENEMY_DEFINITIONS
         // (src/assets/enemies/) — no hardcodear una lista de tipos acá, se
@@ -332,7 +332,7 @@ export class Dungeon {
 
     const testItems = ['rusty_sword', 'worn_tunic', 'wood', 'stone', 'health_potion'];
     for (const itemType of testItems) {
-      const pos = room.getRandomFloorPosition();
+      const pos = room.getRandomFloorPosition(this.grid);
       const item = createItemInstance(itemType, pos.x, pos.y, `item_${Date.now()}_${itemType}`);
       if (item) this.items.push(item);
     }
@@ -675,7 +675,7 @@ export class Dungeon {
       count = Math.min(count, maxEnemies - this.enemies.length);
 
       for (let j = 0; j < count; j++) {
-        const pos = room.getRandomFloorPosition();
+        const pos = room.getRandomFloorPosition(this.grid);
         this.enemies.push(createEnemyInstance(floor, pos.x, pos.y, `enemy_${floor}_${i}_${j}`));
       }
     }
@@ -689,7 +689,7 @@ export class Dungeon {
       if (Math.random() < 0.6) {
         const count = 1 + Math.floor(Math.random() * 3);
         for (let i = 0; i < count; i++) {
-          const pos = room.getRandomFloorPosition();
+          const pos = room.getRandomFloorPosition(this.grid);
           const type = materialTypes[Math.floor(Math.random() * materialTypes.length)];
           const item = createItemInstance(type, pos.x, pos.y, `item_${floor}_${room.x}_${room.y}_${i}`);
           if (item) this.items.push(item);
@@ -699,7 +699,7 @@ export class Dungeon {
       if (room.type === 'treasure') {
         const count = 2 + Math.floor(Math.random() * 3);
         for (let i = 0; i < count; i++) {
-          const pos = room.getRandomFloorPosition();
+          const pos = room.getRandomFloorPosition(this.grid);
           const allItems = [...materialTypes, ...consumableTypes,
             'rusty_sword', 'stone_axe', 'worn_tunic'];
           const type = allItems[Math.floor(Math.random() * allItems.length)];
@@ -709,7 +709,7 @@ export class Dungeon {
       }
 
       if (room.type === 'workshop') {
-        const pos = room.getRandomFloorPosition();
+        const pos = room.getRandomFloorPosition(this.grid);
         const type = consumableTypes[Math.floor(Math.random() * consumableTypes.length)];
         const item = createItemInstance(type, pos.x, pos.y, `item_${floor}_${room.x}_${room.y}_workshop`);
         if (item) this.items.push(item);

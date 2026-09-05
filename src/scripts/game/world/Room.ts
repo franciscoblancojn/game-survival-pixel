@@ -127,16 +127,44 @@ export class Room {
     return { x: dx, y: dy };
   }
 
-  getRandomFloorPosition(): { x: number; y: number } {
+  /**
+   * Una celda al azar del interior de la sala, evitando el centro (ahí van
+   * las escaleras) — y, si se pasa `grid`, exigiendo que sea TILE.FLOOR de
+   * verdad. Sin el chequeo del grid, esto solo mira la geometría de la
+   * sala y puede devolver una celda que `addInternalWalls` convirtió en
+   * TILE.WALL después de `writeTiles` — antes pasaba: ~1.6% de los items/
+   * enemigos terminaban dentro de un muro interno. `Dungeon.placeItems`/
+   * `placeEnemies` corren después de `addInternalWalls`, así que siempre
+   * deben pasar el grid acá.
+   */
+  getRandomFloorPosition(grid?: TileType[][]): { x: number; y: number } {
     let attempts = 0;
     while (attempts < 50) {
       const x = this.x + 1 + Math.floor(Math.random() * (this.width - 2));
       const y = this.y + 1 + Math.floor(Math.random() * (this.height - 2));
-      if (x !== this.centerX || y !== this.centerY) {
+      if ((x !== this.centerX || y !== this.centerY) && (!grid || grid[y][x] === TILE.FLOOR)) {
         return { x, y };
       }
       attempts++;
     }
-    return { x: this.centerX + 1, y: this.centerY + 1 };
+    return grid ? this.findAnyFloorPosition(grid) : { x: this.centerX + 1, y: this.centerY + 1 };
+  }
+
+  /**
+   * Último recurso si 50 intentos al azar no encontraron un FLOOR libre
+   * fuera del centro (sala pequeña muy tapada de muros internos): recorre
+   * la sala entera en orden. Si ni siquiera así hay uno, devuelve el
+   * centro — peor que ideal (ahí suelen ir las escaleras) pero nunca un
+   * muro, y solo pasa en salas patológicamente chicas/tapadas.
+   */
+  private findAnyFloorPosition(grid: TileType[][]): { x: number; y: number } {
+    for (let y = this.y + 1; y < this.y + this.height - 1; y++) {
+      for (let x = this.x + 1; x < this.x + this.width - 1; x++) {
+        if ((x !== this.centerX || y !== this.centerY) && grid[y][x] === TILE.FLOOR) {
+          return { x, y };
+        }
+      }
+    }
+    return { x: this.centerX, y: this.centerY };
   }
 }

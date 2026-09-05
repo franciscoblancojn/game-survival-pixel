@@ -183,6 +183,25 @@ describe("Dungeon.generateLevel — generación de niveles", () => {
     expect(dungeon.stairsUpPos).toEqual(up);
     expect(dungeon.stairsDownPos).toEqual(down);
   });
+
+  // Regresión: addInternalWalls() corre ANTES de placeItems/placeEnemies,
+  // así que una celda geométricamente "interior" de la sala puede haberse
+  // convertido en TILE.WALL para cuando se coloca un item/enemigo ahí.
+  // getRandomFloorPosition() no miraba el grid, solo la geometría de la
+  // sala — antes del arreglo, ~1.6% de los items/enemigos terminaban
+  // dentro de un muro interno.
+  it("ningún item ni enemigo se coloca sobre un muro (incluidos los internos de addInternalWalls)", () => {
+    for (let i = 0; i < SEEDS; i++) {
+      const dungeon = new Dungeon();
+      dungeon.generateLevel(1 + (i % 8));
+
+      const badItems = dungeon.items.filter(it => dungeon.getTile(it.x, it.y) === TILE.WALL);
+      const badEnemies = dungeon.enemies.filter(e => dungeon.getTile(e.x, e.y) === TILE.WALL);
+
+      expect(badItems, `seed ${i}: items sobre un muro ${JSON.stringify(badItems)}`).toHaveLength(0);
+      expect(badEnemies, `seed ${i}: enemigos sobre un muro ${JSON.stringify(badEnemies)}`).toHaveLength(0);
+    }
+  });
 });
 
 describe("Dungeon.generateMarket — piso 0", () => {

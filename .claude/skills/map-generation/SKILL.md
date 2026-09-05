@@ -66,6 +66,7 @@ Quedan ~1 abertura por nivel que sigue siendo pasillo y no puerta: las de **esqu
 ## Room — muros internos y puertas decorativas
 
 - `addInternalWalls(grid, count)`: coloca `count` muros aleatorios dentro de la sala (nunca en el centro exacto ni a distancia ≤1 de una puerta ya en `room.doors`). Requiere que `room.doors` esté poblado ANTES de llamarse — en `generateLevel` esto ya se respeta (paso 7 corre después del paso 5/6).
+- `getRandomFloorPosition(grid?)`: una celda al azar del interior de la sala, para `placeItems`/`placeEnemies`/`generateTestRoom`. **Siempre pasar `grid`** (normalmente `this.grid`) — como `addInternalWalls` corre ANTES (paso 7, antes del paso 8), una celda geométricamente "interior" puede ya ser `TILE.WALL`; sin el grid, el método solo mira la geometría de la sala y puede devolver esa celda igual (bug real: ~1.6% de los items/enemigos terminaban dentro de un muro interno, arreglado). Si 50 intentos al azar no encuentran un `FLOOR` libre, recorre la sala entera (`findAnyFloorPosition`) antes de rendirse y devolver el centro.
 - `addDoor(side)`: sigue existiendo pero **solo se usa hoy en `generateTestRoom()`** (una sala aislada de prueba/fallback cuando la generación normal produce <2 salas). No la reutilices para el flujo normal de niveles — ahí las puertas nacen exclusivamente de `carveCorridor`/`registerCorridorDoor`.
 
 ## Tipos de sala y su rol
@@ -89,5 +90,6 @@ Quedan ~1 abertura por nivel que sigue siendo pasillo y no puerta: las de **esqu
 3. Ninguna tira de puertas seguidas supera 4 celdas.
 4. Toda puerta tiene 2 muros enfrentados (regla de puertas) y el eje de paso transitable.
 5. `room.doors` está sincronizado con el grid (toda entrada apunta a una celda `TILE.DOOR` real).
+6. Ningún item ni enemigo se coloca sobre `TILE.WALL` (incluidos los muros internos de `addInternalWalls`).
 
 Estas tres son el contrato de regresión de la generación de mapas — cualquier cambio en `Dungeon.ts`/`Room.ts` debe seguir pasándolas. Si necesitas relajar el límite del punto 3, hazlo con conocimiento de causa (ver la nota de las "puertas dobles" arriba) y no solo para hacer pasar un test.
